@@ -1,0 +1,151 @@
+{#
+  AI SUGGESTION PANEL — returned from POST /paragraph/{index}/ai
+  Swapped into #para-{index} via hx-swap="outerHTML"
+
+  Context: project, chapter_key, index, operation, original_text, suggested_text
+#}
+
+<div id="para-{{ index }}"
+     class="bg-slate-800/80 border border-amber-600/60 rounded-xl p-5 mb-3">
+
+  {# ── Header ── #}
+  <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center gap-2">
+      <span class="text-amber-400 text-base">✨</span>
+      <span class="text-sm font-semibold text-amber-300">
+        AI Suggestion —
+        {% if operation == "expand" %}Expand
+        {% elif operation == "rephrase" %}Rephrase
+        {% elif operation == "rewrite" %}Rewrite
+        {% elif operation == "generate_after" %}New Paragraph
+        {% else %}{{ operation | title }}{% endif %}
+      </span>
+    </div>
+    <span class="text-xs text-slate-600 font-mono">¶ {{ index + 1 }}</span>
+  </div>
+
+  {% if operation == "generate_after" %}
+
+  {# ── Generate After: show original context + new paragraph ── #}
+  <div class="mb-5">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Paragraph before (context)</div>
+    <div class="text-sm leading-relaxed font-serif text-slate-500 bg-slate-950/50
+                border border-slate-800 rounded-lg p-3 mb-4 max-h-24 overflow-y-auto">
+      {{ original_text }}
+    </div>
+
+    <div class="text-xs font-medium text-amber-500 uppercase tracking-wider mb-2">New paragraph to insert after ↑</div>
+    <div class="text-sm leading-relaxed font-serif text-slate-200 bg-amber-950/20
+                border border-amber-700/40 rounded-lg p-3 min-h-[5rem]">
+      {{ suggested_text }}
+    </div>
+  </div>
+
+  {# ── Accept (insert after) / Reject ── #}
+  <div class="flex items-center gap-3">
+
+    <form
+      hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/paragraph/{{ index }}"
+      hx-target="#paragraphs-list"
+      hx-swap="innerHTML"
+      class="inline"
+    >
+      <input type="hidden" name="action" value="insert_after">
+      <textarea name="text" class="hidden">{{ suggested_text }}</textarea>
+      <button
+        type="submit"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg
+               bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-semibold
+               transition-colors cursor-pointer"
+      >
+        ✓ Insert
+      </button>
+    </form>
+
+    <form
+      hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/paragraph/{{ index }}/ai/reject"
+      hx-target="#para-{{ index }}"
+      hx-swap="outerHTML"
+      class="inline"
+    >
+      <button
+        type="submit"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg
+               bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-semibold
+               transition-colors cursor-pointer"
+      >
+        ✕ Discard
+      </button>
+    </form>
+
+    <span class="text-xs text-slate-600 ml-2">Insert adds the paragraph after ¶ {{ index + 1 }} · Discard throws it away</span>
+  </div>
+
+  {% else %}
+
+  {# ── Standard operations: side-by-side comparison ── #}
+  <div class="grid grid-cols-2 gap-4 mb-5">
+
+    {# Original #}
+    <div>
+      <div class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Original</div>
+      <div class="text-sm leading-relaxed font-serif text-slate-500 bg-slate-950/50
+                  border border-slate-800 rounded-lg p-3 min-h-[5rem]">
+        {{ original_text }}
+      </div>
+    </div>
+
+    {# Suggested #}
+    <div>
+      <div class="text-xs font-medium text-amber-500 uppercase tracking-wider mb-2">Suggested</div>
+      <div class="text-sm leading-relaxed font-serif text-slate-200 bg-amber-950/20
+                  border border-amber-700/40 rounded-lg p-3 min-h-[5rem]">
+        {{ suggested_text }}
+      </div>
+    </div>
+
+  </div>
+
+  {# ── Accept / Reject buttons ── #}
+  <div class="flex items-center gap-3">
+
+    <form
+      hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/paragraph/{{ index }}/ai/accept"
+      hx-target="#para-{{ index }}"
+      hx-swap="outerHTML"
+      class="inline"
+    >
+      <textarea name="text" class="hidden">{{ suggested_text }}</textarea>
+      <button
+        type="submit"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg
+               bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-semibold
+               transition-colors cursor-pointer"
+      >
+        ✓ Accept
+      </button>
+    </form>
+
+    <form
+      hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/paragraph/{{ index }}/ai/reject"
+      hx-target="#para-{{ index }}"
+      hx-swap="outerHTML"
+      class="inline"
+    >
+      <button
+        type="submit"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg
+               bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-semibold
+               transition-colors cursor-pointer"
+      >
+        ✕ Reject
+      </button>
+    </form>
+
+    <span class="text-xs text-slate-600 ml-2">Accept replaces the paragraph · Reject discards the suggestion</span>
+
+  </div>
+
+  {% endif %}
+
+</div>

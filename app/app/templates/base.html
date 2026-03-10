@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Cassian{% endblock %}</title>
+
+  <!-- Tailwind CSS (CDN — swap for compiled build before production) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            serif: ['"EB Garamond"', 'Georgia', 'serif'],
+            sans:  ['Inter', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            amber: {
+              400: '#fbbf24',
+              500: '#f59e0b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- UI Fonts — served locally (run scripts/download_fonts.sh to populate) -->
+  <!-- Falls back to Google CDN if local files are missing -->
+  <style>
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 300 600;
+      font-display: swap;
+      src: url('/static/fonts/Inter-VariableFont_opsz,wght.ttf') format('truetype');
+    }
+    @font-face {
+      font-family: 'EB Garamond';
+      font-style: normal;
+      font-weight: 400 700;
+      font-display: swap;
+      src: url('/static/fonts/EBGaramond-VariableFont_wght.ttf') format('truetype');
+    }
+    @font-face {
+      font-family: 'EB Garamond';
+      font-style: italic;
+      font-weight: 400 700;
+      font-display: swap;
+      src: url('/static/fonts/EBGaramond-Italic-VariableFont_wght.ttf') format('truetype');
+    }
+  </style>
+  <!-- Fallback: if local fonts aren't installed, load from Google CDN -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet" media="print" onload="this.media='all'" />
+  <noscript>
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  </noscript>
+
+  <!-- HTMX (for live updates without full page reloads) -->
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .font-serif { font-family: 'EB Garamond', Georgia, serif; }
+
+    /* Subtle scrollbar */
+    ::-webkit-scrollbar       { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+    /* HTMX loading indicator */
+    .htmx-indicator { opacity: 0; transition: opacity 200ms; }
+    .htmx-request .htmx-indicator { opacity: 1; }
+    .htmx-request.htmx-indicator  { opacity: 1; }
+
+    /* Fade-in for HTMX swapped content */
+    .htmx-added { animation: fadeIn 250ms ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+  </style>
+
+  {% block head %}{% endblock %}
+</head>
+
+<body class="h-full bg-slate-950 text-slate-100 antialiased">
+
+  <!-- ── Sidebar ──────────────────────────────────────────────── -->
+  <div class="flex h-full">
+    <aside class="w-56 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col">
+
+      <!-- Logo -->
+      <div class="px-5 py-6 border-b border-slate-800">
+        <a href="/" class="flex items-center gap-2 group">
+          <span class="text-amber-400 text-2xl font-serif leading-none">Θ</span>
+          <div>
+            <div class="text-sm font-semibold text-slate-100 tracking-wide">Cassian</div>
+            <div class="text-xs text-slate-500">Book Pipeline</div>
+          </div>
+        </a>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+
+        {# ── Global nav (always visible) ────────────────────────── #}
+        <a href="/"
+           class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm
+                  {% if active_page == 'dashboard' %}bg-slate-800 text-amber-400{% else %}text-slate-400 hover:bg-slate-800 hover:text-slate-100{% endif %}
+                  transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+          </svg>
+          Dashboard
+        </a>
+
+        <a href="/projects/new"
+           class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm
+                  {% if active_page == 'new_project' %}bg-slate-800 text-amber-400{% else %}text-slate-400 hover:bg-slate-800 hover:text-slate-100{% endif %}
+                  transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 4v16m8-8H4"/>
+          </svg>
+          New Project
+        </a>
+
+        {# ── Project pipeline nav (visible when inside a project) ── #}
+        {% if project is defined and project %}
+        <div class="mt-4 pt-4 border-t border-slate-800">
+          <div class="px-3 mb-2">
+            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pipeline</div>
+            <div class="text-xs text-slate-600 truncate mt-0.5" title="{{ project.name }}">{{ project.name }}</div>
+          </div>
+
+          {# Phase 1: Genesis #}
+          <div class="mb-2">
+            <div class="px-3 py-1 text-xs font-medium text-slate-600 uppercase tracking-wider">Genesis</div>
+            <a href="/projects/{{ project.id }}/idea"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'idea' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Brainstorm and develop your book concept">
+              <span class="w-4 text-center opacity-60">💡</span> Idea Agent
+            </a>
+            <a href="/projects/{{ project.id }}/framework"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'framework' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Develop chapter outline and structure">
+              <span class="w-4 text-center opacity-60">🏗</span> Framework
+            </a>
+            <a href="/projects/{{ project.id }}/draft-writer"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'draft_writer' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Generate chapter prose from your framework outline">
+              <span class="w-4 text-center opacity-60">✍️</span> Draft Writer
+            </a>
+          </div>
+
+          {# Phase 2: Ingestion #}
+          <div class="mb-2">
+            <div class="px-3 py-1 text-xs font-medium text-slate-600 uppercase tracking-wider">Ingestion</div>
+            <a href="/projects/{{ project.id }}"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'project_detail' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Upload and organise your manuscript files">
+              <span class="w-4 text-center opacity-60">📥</span> Intake
+            </a>
+            <a href="/projects/{{ project.id }}/chapters"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'chapter_manager' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Manage chapters: add, remove, rename, reorder">
+              <span class="w-4 text-center opacity-60">📑</span> Chapters
+            </a>
+          </div>
+
+          {# Phase 3: Project Bible #}
+          <div class="mb-2">
+            <div class="px-3 py-1 text-xs font-medium text-slate-600 uppercase tracking-wider">Project Bible</div>
+            <a href="/projects/{{ project.id }}/world-rules"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'world_rules' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Characters, locations, timelines, rules — the living reference for your project">
+              <span class="w-4 text-center opacity-60">📖</span> World Rules
+            </a>
+          </div>
+
+          {# Phase 4–5: Editing #}
+          <div class="mb-2">
+            <div class="px-3 py-1 text-xs font-medium text-slate-600 uppercase tracking-wider">Editing</div>
+            <a href="/projects/{{ project.id }}/consistency"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'consistency' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Character details, timelines, world-building rules — checks everything matches">
+              <span class="w-4 text-center opacity-60">🔗</span> Consistency
+            </a>
+            <a href="/projects/{{ project.id }}/dev-editor"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'dev_editor' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Big-picture structural editing: plot, pacing, characters">
+              <span class="w-4 text-center opacity-60">🔍</span> Developmental
+            </a>
+            <a href="/projects/{{ project.id }}/copy-line-editor"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'copy_line_editor' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Grammar, spelling, style guide (Mechanical) or flow, rhythm, word choice (Flow)">
+              <span class="w-4 text-center opacity-60">✏️</span> Copy & Line
+            </a>
+            <a href="/projects/{{ project.id }}/diversity-reader"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'diversity_reader' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Representation, sensitivity, and inclusive language analysis">
+              <span class="w-4 text-center opacity-60">🌍</span> Diversity Reader
+            </a>
+          </div>
+
+          {# Phase 6: Targeted Tools #}
+          <div class="mb-2">
+            <div class="px-3 py-1 text-xs font-medium text-slate-600 uppercase tracking-wider">Tools</div>
+            <a href="/projects/{{ project.id }}/workbench"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'workbench' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Select any passage and insert, expand, rephrase, rewrite, or directly edit">
+              <span class="w-4 text-center opacity-60">🛠</span> Workbench
+            </a>
+          </div>
+
+          {# Phase 7: Visual #}
+          <div class="mb-2">
+            <div class="px-3 py-1 text-xs font-medium text-slate-600 uppercase tracking-wider">Visual</div>
+            <a href="/projects/{{ project.id }}/fonts"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'fonts' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Choose and preview fonts for your book">
+              <span class="w-4 text-center opacity-60">🔤</span> Fonts
+            </a>
+            <a href="/projects/{{ project.id }}/illustrations"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'illustrations' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="AI-generated chapter illustrations with style consistency">
+              <span class="w-4 text-center opacity-60">🎨</span> Illustrations
+            </a>
+          </div>
+
+          {# Phase 8: Production #}
+          <div class="mb-2">
+            <div class="px-3 py-1 text-xs font-medium text-slate-600 uppercase tracking-wider">Production</div>
+            <a href="/projects/{{ project.id }}/proofread"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'proofread' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Final pass for typos, formatting errors, widows and orphans">
+              <span class="w-4 text-center opacity-60">🔎</span> Proofread
+            </a>
+            <a href="/projects/{{ project.id }}/layout"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'layout' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Publisher-aware layout: trim sizes, bleeds, margins, print-ready PDF">
+              <span class="w-4 text-center opacity-60">📐</span> Layout
+            </a>
+            <a href="/projects/{{ project.id }}/cover"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'cover' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Front cover, spine, and back cover with auto-generated blurb">
+              <span class="w-4 text-center opacity-60">📕</span> Cover
+            </a>
+          </div>
+
+          {# Phase 9: Publish #}
+          <div class="mb-2">
+            <div class="px-3 py-1 text-xs font-medium text-slate-600 uppercase tracking-wider">Publish</div>
+            <a href="/projects/{{ project.id }}/metadata"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'metadata' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Title, ISBN, categories, keywords, and publisher metadata">
+              <span class="w-4 text-center opacity-60">📋</span> Metadata
+            </a>
+            <a href="/projects/{{ project.id }}/export"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'export' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Download print PDF, eBook, or marketing materials">
+              <span class="w-4 text-center opacity-60">📦</span> Export
+            </a>
+          </div>
+
+          {# Snapshots / Version History #}
+          <div class="mt-2 pt-2 border-t border-slate-800">
+            <a href="/projects/{{ project.id }}/snapshots"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'snapshots' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Timeline of automatic backups — restore to any previous state">
+              <span class="w-4 text-center opacity-60">🕐</span> Version History
+            </a>
+          </div>
+        </div>
+        {% endif %}
+
+      </nav>
+
+      <!-- Bottom info -->
+      <div class="px-5 py-4 border-t border-slate-800 flex-shrink-0">
+        <div class="text-xs text-slate-600">v0.2.0</div>
+      </div>
+    </aside>
+
+    <!-- ── Main content ───────────────────────────────────────── -->
+    <main class="flex-1 overflow-y-auto">
+
+      <!-- Page header -->
+      {% block page_header %}{% endblock %}
+
+      <!-- Page body -->
+      <div class="p-8">
+        {% block content %}{% endblock %}
+      </div>
+
+    </main>
+  </div>
+
+  {% block scripts %}{% endblock %}
+
+  <script>
+    /*
+      Local-time converter — runs on every page after the DOM is ready.
+      Any element with  data-localtime="<ISO 8601 string>"  will have its
+      text replaced with the time formatted in the browser's local timezone.
+
+      Optional attribute:
+        data-localtime-format="date"   → "Feb 28, 2026"
+        data-localtime-format="time"   → "09:11:23 AM"
+        (default = full)               → "Feb 28, 2026 at 9:11 AM"
+
+      Why: the server may be in UTC (Hetzner) while the user is in EST.
+      Strings without a timezone suffix are assumed to be UTC (we append 'Z').
+    */
+    (function () {
+      function ensureUtc(iso) {
+        // If there's no timezone indicator at the end, assume UTC
+        if (!/[Z]$/.test(iso) && !/[+\-]\d{2}:\d{2}$/.test(iso)) {
+          return iso + 'Z';
+        }
+        return iso;
+      }
+
+      function fmtFull(d) {
+        return d.toLocaleString(undefined, {
+          month: 'short', day: 'numeric', year: 'numeric',
+          hour: 'numeric', minute: '2-digit'
+        });
+      }
+      function fmtDate(d) {
+        return d.toLocaleDateString(undefined, {
+          month: 'short', day: 'numeric', year: 'numeric'
+        });
+      }
+      function fmtTime(d) {
+        return d.toLocaleTimeString(undefined, {
+          hour: 'numeric', minute: '2-digit', second: '2-digit'
+        });
+      }
+
+      document.querySelectorAll('[data-localtime]').forEach(function (el) {
+        var raw = el.getAttribute('data-localtime');
+        if (!raw) return;
+        var d = new Date(ensureUtc(raw));
+        if (isNaN(d.getTime())) return;
+        var fmt = el.getAttribute('data-localtime-format') || 'full';
+        if (fmt === 'date')      el.textContent = fmtDate(d);
+        else if (fmt === 'time') el.textContent = fmtTime(d);
+        else                     el.textContent = fmtFull(d);
+      });
+    })();
+  </script>
+
+  <!-- ── Global lightbox overlay (works on any page with .lightbox-trigger images) ── -->
+  <div id="lightbox-overlay"
+       style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999;
+              background:rgba(0,0,0,0.92); align-items:center; justify-content:center; padding:2rem; cursor:zoom-out;">
+    <img id="lightbox-img" src="" alt=""
+         style="max-width:100%; max-height:100%; object-fit:contain; border-radius:0.5rem; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);" />
+    <button id="lightbox-close-btn"
+            style="position:absolute; top:1rem; right:1rem; background:none; border:none;
+                   color:rgba(255,255,255,0.6); cursor:pointer; font-size:2rem; line-height:1;">
+      ✕
+    </button>
+  </div>
+  <script>
+    (function() {
+      var overlay = document.getElementById('lightbox-overlay');
+      var lbImg   = document.getElementById('lightbox-img');
+
+      function openLightbox(src, alt) {
+        lbImg.src = src;
+        lbImg.alt = alt || '';
+        overlay.style.display = 'flex';
+      }
+      function closeLightbox() {
+        overlay.style.display = 'none';
+        lbImg.src = '';
+      }
+
+      // Event delegation for .lightbox-trigger images
+      document.addEventListener('click', function(e) {
+        var trigger = e.target.closest('.lightbox-trigger');
+        if (!trigger) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var src = trigger.getAttribute('data-full-src') || trigger.src;
+        var alt = trigger.getAttribute('data-caption') || trigger.alt || '';
+        openLightbox(src, alt);
+      });
+
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay || e.target === lbImg || e.target.id === 'lightbox-close-btn') {
+          closeLightbox();
+        }
+      });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && overlay.style.display === 'flex') closeLightbox();
+      });
+
+      // Expose globally so page-specific scripts can use it
+      window.openLightbox  = openLightbox;
+      window.closeLightbox = closeLightbox;
+    })();
+  </script>
+</body>
+</html>

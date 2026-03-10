@@ -1,0 +1,100 @@
+{#
+  HTMX fragment — diversity_reader_chapter_concerns.html
+  Rendered by GET /projects/{project_id}/diversity-reader/chapter/{chapter_key}
+  Swapped into the chapter body via HTMX if used for lazy loading.
+#}
+
+{% set sev_colors = {
+  "flag":    "text-red-400    bg-red-900/20    border-red-700/30",
+  "consider":"text-amber-400  bg-amber-900/20  border-amber-700/30",
+  "note":    "text-blue-400   bg-blue-900/20   border-blue-700/30",
+} %}
+
+{% set cat_label_colors = {
+  "representation":    "text-purple-400",
+  "cultural_accuracy": "text-cyan-400",
+  "stereotyping":      "text-orange-400",
+  "language":          "text-amber-400",
+  "power_dynamics":    "text-red-400",
+  "disability":        "text-blue-400",
+  "gender_and_sexuality": "text-pink-400",
+  "missing_perspectives": "text-slate-400",
+} %}
+
+{% set sev_icons = {"flag": "🔴", "consider": "🟡", "note": "🔵"} %}
+
+{% set ch_concerns = chapter_data.get('concerns', []) %}
+
+{% if not ch_concerns %}
+  <p class="px-5 py-4 text-sm text-slate-500 text-center">No concerns found in this chapter.</p>
+{% else %}
+<div class="divide-y divide-slate-800/40" id="concern-list-{{ chapter_key }}">
+  {% for concern in ch_concerns %}
+  {% set loop_idx       = loop.index0 %}
+  {% set sev            = concern.get('severity', 'note').lower() %}
+  {% set cat            = concern.get('category', '') %}
+  {% set colors         = sev_colors.get(sev, 'text-slate-400 bg-slate-800 border-slate-700') %}
+  {% set cat_color      = cat_label_colors.get(cat, 'text-slate-400') %}
+  {% set is_acknowledged = concern.get('acknowledged', false) %}
+  {% set icon           = sev_icons.get(sev, '●') %}
+
+  <div id="concern-{{ chapter_key }}-{{ loop_idx }}"
+       class="flex items-start gap-3 px-5 py-3.5 border rounded-none
+              {{ colors }}
+              {{ 'opacity-40' if is_acknowledged else '' }}
+              transition-opacity">
+
+    {# Severity + category #}
+    <div class="flex-shrink-0 w-40">
+      <div class="text-xs font-semibold uppercase tracking-wide">
+        {{ icon }} {{ sev.title() }}
+      </div>
+      <div class="text-xs mt-0.5 {{ cat_color }}">
+        {{ cat.replace('_', ' ').title() }}
+        <span class="text-slate-600 ml-1">¶{{ concern.get('paragraph_index', '?') }}</span>
+      </div>
+    </div>
+
+    {# Context + explanation + suggestion #}
+    <div class="flex-1 min-w-0">
+      <div class="text-xs font-mono leading-relaxed break-words concern-context
+                  {{ 'line-through' if is_acknowledged else '' }}">
+        {{ concern.get('context', '') }}
+      </div>
+      <div class="text-xs text-slate-500 mt-1 {{ 'line-through' if is_acknowledged else '' }}">
+        <span class="text-slate-600">→</span>
+        {{ concern.get('explanation', '') }}
+      </div>
+      {% if concern.get('suggestion') and not is_acknowledged %}
+      <div class="text-xs text-slate-400 mt-0.5">
+        <span class="text-slate-600">Consider:</span>
+        {{ concern.get('suggestion', '') }}
+      </div>
+      {% endif %}
+    </div>
+
+    {# Acknowledge button #}
+    {% if not is_acknowledged %}
+    <button
+      hx-post="/projects/{{ project.id }}/diversity-reader/acknowledge/{{ chapter_key }}/{{ loop_idx }}"
+      hx-target="#concern-{{ chapter_key }}-{{ loop_idx }}"
+      hx-swap="outerHTML"
+      class="flex-shrink-0 text-xs text-slate-600 hover:text-slate-400
+             border border-slate-700 hover:border-slate-500
+             rounded-lg px-2 py-0.5 transition-colors whitespace-nowrap">
+      Noted ✓
+    </button>
+    {% else %}
+    <span class="flex-shrink-0 text-xs text-slate-600">Noted ✓</span>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+</div>
+
+<script>
+  document.querySelectorAll('.concern-context').forEach(function (el) {
+    el.innerHTML = el.innerHTML.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-400">$1</strong>');
+  });
+</script>
+{% endif %}

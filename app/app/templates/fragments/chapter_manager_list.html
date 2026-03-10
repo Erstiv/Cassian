@@ -1,0 +1,139 @@
+{# HTMX fragment: chapter list for the Chapter Manager page #}
+
+{# ── Stats bar ────────────────────────────────────────────────────────────── #}
+<div class="flex items-center gap-6 mb-4 px-1">
+  <div class="text-sm text-slate-400">
+    <span class="text-slate-200 font-semibold">{{ chapters|length }}</span> chapters
+  </div>
+  <div class="text-sm text-slate-400">
+    <span class="text-slate-200 font-semibold">{{ "{:,}".format(total_words) }}</span> words
+  </div>
+  <div class="text-xs text-slate-600 flex items-center gap-2 ml-auto">
+    <span class="inline-block w-2 h-2 rounded-full bg-amber-500"></span> Draft
+    <span class="inline-block w-2 h-2 rounded-full bg-blue-500"></span> Ingested
+    <span class="inline-block w-2 h-2 rounded-full bg-green-500"></span> Workbench
+  </div>
+</div>
+
+{# ── Chapter rows ─────────────────────────────────────────────────────────── #}
+<div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+  <div id="chapter-rows" data-project-id="{{ project.id }}">
+    {% for ch in chapters %}
+    <div data-chapter-num="{{ ch.number }}"
+         class="flex items-center gap-3 px-5 py-3 border-b border-slate-800/60 last:border-b-0
+                hover:bg-slate-800/40 transition-colors group cursor-grab active:cursor-grabbing">
+
+      {# Drag handle #}
+      <div class="text-slate-700 group-hover:text-slate-500 transition-colors text-sm select-none" title="Drag to reorder">☰</div>
+
+      {# Number #}
+      <div class="w-10 text-center text-xs font-mono text-slate-500">{{ ch.number }}</div>
+
+      {# Type badge #}
+      <div class="w-24">
+        {% if ch.type != 'chapter' %}
+        <span class="text-xs px-2 py-0.5 rounded-full
+                     {% if ch.type == 'appendix' %}bg-purple-900/40 text-purple-400 border border-purple-700/40
+                     {% elif ch.type == 'character_sheet' %}bg-cyan-900/40 text-cyan-400 border border-cyan-700/40
+                     {% elif ch.type == 'prologue' or ch.type == 'epilogue' %}bg-amber-900/40 text-amber-400 border border-amber-700/40
+                     {% elif ch.type == 'interlude' %}bg-pink-900/40 text-pink-400 border border-pink-700/40
+                     {% else %}bg-slate-800 text-slate-400 border border-slate-700{% endif %}">
+          {{ ch.type_label }}
+        </span>
+        {% else %}
+        <span class="text-xs text-slate-600">Chapter</span>
+        {% endif %}
+      </div>
+
+      {# Title (inline editable) #}
+      <div class="flex-1 min-w-0">
+        <form hx-post="/projects/{{ project.id }}/chapters/{{ ch.number }}/rename"
+              hx-target="#chapter-list"
+              hx-swap="innerHTML"
+              class="flex items-center gap-2">
+          <input type="text" name="title" value="{{ ch.title }}"
+                 class="flex-1 bg-transparent border-0 border-b border-transparent hover:border-slate-700
+                        focus:border-amber-500 text-sm text-slate-200 py-0.5 px-1
+                        focus:outline-none transition-colors truncate"
+                 onchange="this.form.requestSubmit()">
+        </form>
+        {% if ch.summary %}
+        <div class="text-xs text-slate-600 mt-0.5 truncate px-1">{{ ch.summary[:80] }}{% if ch.summary|length > 80 %}…{% endif %}</div>
+        {% endif %}
+      </div>
+
+      {# Word count #}
+      <div class="w-16 text-right text-xs text-slate-500 tabular-nums">
+        {% if ch.word_count > 0 %}
+        {{ "{:,}".format(ch.word_count) }}
+        {% else %}
+        <span class="text-slate-700">—</span>
+        {% endif %}
+      </div>
+
+      {# Pipeline status dots #}
+      <div class="flex items-center gap-1 w-20 justify-center" title="Pipeline stages: Draft · Ingested · Workbench">
+        <span class="w-2 h-2 rounded-full {% if ch.pipeline.drafts %}bg-amber-500{% else %}bg-slate-800{% endif %}"></span>
+        <span class="w-2 h-2 rounded-full {% if ch.pipeline.ingested %}bg-blue-500{% else %}bg-slate-800{% endif %}"></span>
+        <span class="w-2 h-2 rounded-full {% if ch.pipeline.workbench %}bg-green-500{% else %}bg-slate-800{% endif %}"></span>
+      </div>
+
+      {# Actions #}
+      <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {# Type selector #}
+        <form hx-post="/projects/{{ project.id }}/chapters/{{ ch.number }}/type"
+              hx-target="#chapter-list"
+              hx-swap="innerHTML"
+              class="inline">
+          <select name="chapter_type"
+                  onchange="this.form.requestSubmit()"
+                  class="bg-slate-800 border border-slate-700 rounded text-xs text-slate-400 py-0.5 px-1
+                         focus:outline-none cursor-pointer hover:text-slate-200 transition-colors"
+                  title="Change chapter type">
+            {% for type_key, type_info in chapter_types.items() %}
+            <option value="{{ type_key }}" {% if ch.type == type_key %}selected{% endif %}>{{ type_info.label }}</option>
+            {% endfor %}
+          </select>
+        </form>
+
+        {# Generate with AI #}
+        {% if ch.word_count == 0 %}
+        <button hx-post="/projects/{{ project.id }}/chapters/{{ ch.number }}/generate"
+                hx-target="#chapter-list"
+                hx-swap="innerHTML"
+                hx-indicator="#spinner-{{ ch.number }}"
+                hx-confirm="Generate AI content for '{{ ch.title }}'?"
+                class="text-xs text-amber-500 hover:text-amber-400 px-2 py-0.5 rounded
+                       hover:bg-amber-900/20 transition-colors"
+                title="Generate content with AI">
+          ✨
+        </button>
+        <span id="spinner-{{ ch.number }}" class="htmx-indicator">
+          <svg class="animate-spin h-3 w-3 text-amber-400 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+        </span>
+        {% endif %}
+
+        {# Delete #}
+        <button hx-post="/projects/{{ project.id }}/chapters/{{ ch.number }}/delete"
+                hx-target="#chapter-list"
+                hx-swap="innerHTML"
+                hx-confirm="Delete chapter {{ ch.number }}: '{{ ch.title }}'? This will remove all pipeline data for this chapter."
+                class="text-xs text-red-500/60 hover:text-red-400 px-2 py-0.5 rounded
+                       hover:bg-red-900/20 transition-colors"
+                title="Delete chapter">
+          ✕
+        </button>
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if not chapters %}
+    <div class="px-6 py-12 text-center">
+      <div class="text-slate-600 text-sm">No chapters yet. Add one below, or generate a framework first.</div>
+    </div>
+    {% endif %}
+  </div>
+</div>

@@ -1,0 +1,454 @@
+{% extends "base.html" %}
+
+{% block title %}Review Proposals — {{ run.name }} — {{ project.name }}{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5">
+  <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+    <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+    <span>›</span>
+    <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+    <span>›</span>
+    <a href="/projects/{{ project.id }}/runs/{{ run.id }}" class="hover:text-slate-300 transition-colors">{{ run.name }}</a>
+    <span>›</span>
+    <span class="text-slate-400">Review Proposals</span>
+  </div>
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-semibold text-slate-100">AI Edit Proposals</h1>
+      <p class="text-sm text-slate-500 mt-1">
+        Accept or reject each suggested change. Only accepted edits will be applied to your manuscript.
+      </p>
+    </div>
+
+    <!-- Summary counts -->
+    <div class="flex items-center gap-4 flex-shrink-0 pt-1">
+      <div class="text-center">
+        <div id="count-total" class="text-lg font-semibold text-slate-100">{{ total }}</div>
+        <div class="text-xs text-slate-500">total</div>
+      </div>
+      <div class="text-center">
+        <div id="count-accepted" class="text-lg font-semibold text-emerald-400">{{ accepted }}</div>
+        <div class="text-xs text-slate-500">accepted</div>
+      </div>
+      <div class="text-center">
+        <div id="count-rejected" class="text-lg font-semibold text-red-400">{{ rejected }}</div>
+        <div class="text-xs text-slate-500">rejected</div>
+      </div>
+      <div class="text-center">
+        <div id="count-pending" class="text-lg font-semibold text-amber-400">{{ pending }}</div>
+        <div class="text-xs text-slate-500">pending</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if not chapters %}
+<div class="flex flex-col items-center justify-center py-24 text-center">
+  <div class="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-4">
+    <svg class="w-7 h-7 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+  </div>
+  <p class="text-slate-400 font-medium mb-1">No proposals found</p>
+  <p class="text-slate-600 text-sm">Agent 3 may not have generated any AI suggestions for this run.</p>
+  <a href="/projects/{{ project.id }}/runs/{{ run.id }}"
+     class="mt-6 text-sm text-amber-500 hover:text-amber-400 transition-colors">
+    ← Back to run
+  </a>
+</div>
+
+{% else %}
+
+<!-- ── Chapter cards ── -->
+<div class="space-y-8 mb-12">
+{% for chapter in chapters %}
+
+  {% set ch_accepted = chapter.paragraphs | selectattr("approved", "equalto", true) | list | length %}
+  {% set ch_rejected = chapter.paragraphs | selectattr("approved", "equalto", false) | list | length %}
+  {% set ch_pending  = chapter.paragraphs | length - ch_accepted - ch_rejected %}
+
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+
+    <!-- Chapter header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/80">
+      <div class="flex items-center gap-3">
+        <span class="text-xs font-mono text-slate-500">Ch. {{ chapter.chapter_id }}</span>
+        <h2 class="text-sm font-semibold text-slate-200">{{ chapter.title or "Chapter " ~ chapter.chapter_id }}</h2>
+        {% if chapter.confidence %}
+        <span class="text-xs px-2 py-0.5 rounded-full font-medium
+          {% if chapter.confidence == 'high' %}bg-emerald-900/50 text-emerald-400 border border-emerald-800
+          {% elif chapter.confidence == 'medium' %}bg-amber-900/40 text-amber-400 border border-amber-800
+          {% else %}bg-slate-800 text-slate-400 border border-slate-700{% endif %}">
+          {{ chapter.confidence }} confidence
+        </span>
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-3">
+        <!-- Chapter-level accept/reject all -->
+        <form method="post"
+              action="/projects/{{ project.id }}/runs/{{ run.id }}/proposals/{{ chapter.chapter_id }}/bulk">
+          <input type="hidden" name="decision" value="accept">
+          <button type="submit"
+                  class="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+            Accept all ({{ chapter.paragraphs | length }})
+          </button>
+        </form>
+        <span class="text-slate-700">|</span>
+        <form method="post"
+              action="/projects/{{ project.id }}/runs/{{ run.id }}/proposals/{{ chapter.chapter_id }}/bulk">
+          <input type="hidden" name="decision" value="reject">
+          <button type="submit"
+                  class="text-xs text-red-400 hover:text-red-300 transition-colors">
+            Reject all
+          </button>
+        </form>
+        <span class="text-slate-700 mx-1">·</span>
+        <span class="text-xs text-slate-500">
+          <span class="text-emerald-400">{{ ch_accepted }}✓</span>
+          <span class="text-slate-600 mx-1">/</span>
+          <span class="text-red-400">{{ ch_rejected }}✕</span>
+          <span class="text-slate-600 mx-1">/</span>
+          <span class="text-amber-400">{{ ch_pending }}?</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Paragraph proposals -->
+    <div class="divide-y divide-slate-800/60">
+    {% for para in chapter.paragraphs %}
+      {% set is_accepted = para.approved == true %}
+      {% set is_rejected = para.approved == false %}
+
+      <div class="px-6 py-5
+        {% if is_accepted %}bg-emerald-950/20
+        {% elif is_rejected %}bg-red-950/10
+        {% else %}{% endif %}">
+
+        <!-- Metadata row -->
+        <div class="flex items-center gap-2 mb-3 flex-wrap">
+          <span class="text-xs font-mono text-slate-500">¶{{ para.index }}</span>
+          {% if para.change_type %}
+          <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+            {{ para.change_type | replace("_", " ") }}
+          </span>
+          {% endif %}
+          {% if para.reason %}
+          <span class="text-xs text-slate-500 italic">— {{ para.reason }}</span>
+          {% endif %}
+        </div>
+
+        <!-- Side-by-side diff -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+
+          <!-- Original -->
+          <div>
+            <div class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">Original</div>
+            <div class="text-sm text-slate-400 leading-relaxed font-serif bg-slate-950/50
+                        border border-slate-800 rounded-xl p-4 min-h-[4rem]
+                        {% if is_rejected %}opacity-50{% endif %}">
+              {{ para.original }}
+            </div>
+          </div>
+
+          <!-- Proposed -->
+          <div>
+            <div class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">Proposed</div>
+            <div id="proposed-text-{{ chapter.chapter_id }}-{{ para.index }}"
+                 data-raw-text="{{ para.proposed }}"
+                 class="text-sm leading-relaxed font-serif rounded-xl p-4 min-h-[4rem] border
+              {% if is_accepted %}text-emerald-200 bg-emerald-950/30 border-emerald-800/50
+              {% elif is_rejected %}text-slate-600 bg-slate-950/30 border-slate-800 line-through opacity-40
+              {% else %}text-slate-200 bg-slate-950/50 border-slate-700{% endif %}">
+              {{ para.proposed }}
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Action buttons (HTMX-swappable) -->
+        <div id="proposal-actions-{{ chapter.chapter_id }}-{{ para.index }}">
+          {% set base_url = "/projects/" ~ project.id ~ "/runs/" ~ run.id ~ "/proposals/" ~ chapter.chapter_id ~ "/" ~ para.index %}
+          {% if is_accepted %}
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-900/40 border border-emerald-700/50 rounded-lg px-3 py-1.5">
+              ✓ Accepted
+            </span>
+            <button hx-post="{{ base_url }}" hx-vals='{"decision":"reset"}'
+                    hx-target="#proposal-actions-{{ chapter.chapter_id }}-{{ para.index }}" hx-swap="outerHTML"
+                    class="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer">
+              Undo
+            </button>
+            <button onclick="openEditor('{{ chapter.chapter_id }}', {{ para.index }})"
+                    class="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer">
+              ✎ Edit
+            </button>
+          </div>
+          {% elif is_rejected %}
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-red-400 bg-red-900/40 border border-red-700/50 rounded-lg px-3 py-1.5">
+              ✕ Rejected
+            </span>
+            <button hx-post="{{ base_url }}" hx-vals='{"decision":"reset"}'
+                    hx-target="#proposal-actions-{{ chapter.chapter_id }}-{{ para.index }}" hx-swap="outerHTML"
+                    class="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer">
+              Undo
+            </button>
+            <button onclick="openEditor('{{ chapter.chapter_id }}', {{ para.index }})"
+                    class="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer">
+              ✎ Edit
+            </button>
+          </div>
+          {% else %}
+          <div class="flex items-center gap-2 flex-wrap">
+            <button hx-post="{{ base_url }}" hx-vals='{"decision":"accept"}'
+                    hx-target="#proposal-actions-{{ chapter.chapter_id }}-{{ para.index }}" hx-swap="outerHTML"
+                    class="text-xs font-medium bg-emerald-900/60 hover:bg-emerald-800 text-emerald-300
+                           border border-emerald-700/50 rounded-lg px-3 py-1.5 transition-colors cursor-pointer">
+              ✓ Accept
+            </button>
+            <button onclick="openEditor('{{ chapter.chapter_id }}', {{ para.index }})"
+                    class="text-xs font-medium bg-blue-900/40 hover:bg-blue-900/70 text-blue-400
+                           border border-blue-800/40 rounded-lg px-3 py-1.5 transition-colors cursor-pointer">
+              ✎ Edit &amp; Accept
+            </button>
+            <button hx-post="{{ base_url }}" hx-vals='{"decision":"reject"}'
+                    hx-target="#proposal-actions-{{ chapter.chapter_id }}-{{ para.index }}" hx-swap="outerHTML"
+                    class="text-xs font-medium bg-red-900/40 hover:bg-red-900/70 text-red-400
+                           border border-red-800/40 rounded-lg px-3 py-1.5 transition-colors cursor-pointer">
+              ✕ Reject
+            </button>
+          </div>
+          {% endif %}
+        </div>
+
+      </div>
+    {% endfor %}
+    </div>
+
+    <!-- Flagged items for this chapter -->
+    {% if chapter.flagged %}
+    <div class="px-6 py-4 border-t border-slate-800 bg-amber-950/10">
+      <details>
+        <summary class="text-xs cursor-pointer text-amber-500 hover:text-amber-400 transition-colors">
+          ⚑ {{ chapter.flagged | length }} flagged item{{ "s" if chapter.flagged | length != 1 }} for your attention
+        </summary>
+        <ul class="mt-2 space-y-1.5 pl-3">
+          {% for flag in chapter.flagged %}
+          <li class="text-xs text-amber-400/80">• {{ flag }}</li>
+          {% endfor %}
+        </ul>
+      </details>
+    </div>
+    {% endif %}
+
+  </div>
+{% endfor %}
+</div>
+
+<!-- ── Sticky footer action bar ── -->
+<div class="fixed bottom-0 left-56 right-0 bg-slate-950/95 border-t border-slate-800 backdrop-blur-sm px-8 py-4">
+  <div class="flex items-center justify-between gap-4">
+
+    <div id="footer-status" class="text-sm text-slate-400">
+      <span class="text-amber-400 font-medium" id="footer-pending-count">{{ pending }} undecided</span>
+      <span id="footer-pending-msg"> — undecided proposals will be skipped (original text kept).</span>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <a href="/projects/{{ project.id }}/copy-line-editor"
+         class="text-sm text-slate-500 hover:text-slate-300 transition-colors px-4 py-2">
+        ← Back
+      </a>
+
+      <form method="post" action="/projects/{{ project.id }}/runs/{{ run.id }}/proposals/apply">
+        <button id="footer-apply-btn" type="submit"
+                class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400
+                       text-slate-950 font-semibold text-sm px-6 py-2.5 rounded-lg
+                       transition-colors cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span id="footer-apply-label">
+          {% if accepted > 0 %}
+            Apply {{ accepted }} Change{{ "s" if accepted != 1 }} &amp; Continue Pipeline
+          {% else %}
+            Continue Pipeline (no changes)
+          {% endif %}
+          </span>
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+{% endif %}{# end if chapters #}
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  /* ── Live counter refresh ──────────────────────────────────────────────── */
+  var TOTAL_PROPOSALS = {{ total }};
+
+  function refreshCounts() {
+    var allActions = document.querySelectorAll('[id^="proposal-actions-"]');
+    var accepted = 0, rejected = 0;
+    allActions.forEach(function(el) {
+      var html = el.innerHTML;
+      if (html.indexOf('✓ Accepted') >= 0) accepted++;
+      else if (html.indexOf('✕ Rejected') >= 0) rejected++;
+    });
+    var pending = TOTAL_PROPOSALS - accepted - rejected;
+
+    // Header counts
+    var ce = document.getElementById('count-accepted');
+    var cr = document.getElementById('count-rejected');
+    var cp = document.getElementById('count-pending');
+    if (ce) ce.textContent = accepted;
+    if (cr) cr.textContent = rejected;
+    if (cp) cp.textContent = pending;
+
+    // Footer status
+    var fp = document.getElementById('footer-pending-count');
+    var fm = document.getElementById('footer-pending-msg');
+    var fl = document.getElementById('footer-apply-label');
+    if (pending > 0) {
+      if (fp) { fp.textContent = pending + ' undecided'; fp.className = 'text-amber-400 font-medium'; }
+      if (fm) fm.textContent = ' — undecided proposals will be skipped (original text kept).';
+    } else {
+      if (fp) { fp.textContent = 'All ' + TOTAL_PROPOSALS + ' proposals reviewed.'; fp.className = 'text-emerald-400 font-medium'; }
+      if (fm) fm.textContent = ' Ready to apply ' + accepted + ' accepted change' + (accepted !== 1 ? 's' : '') + '.';
+    }
+    if (fl) {
+      if (accepted > 0) {
+        fl.textContent = 'Apply ' + accepted + ' Change' + (accepted !== 1 ? 's' : '') + ' & Continue Pipeline';
+      } else {
+        fl.textContent = 'Continue Pipeline (no changes)';
+      }
+    }
+  }
+
+  // Refresh after every HTMX swap (accept/reject/undo)
+  document.addEventListener('htmx:afterSwap', function() {
+    refreshCounts();
+  });
+
+  // Also refresh on page load in case some were accepted before
+  document.addEventListener('DOMContentLoaded', function() {
+    refreshCounts();
+  });
+
+  /**
+   * Inline editor for proposal text.
+   * Replaces the "Proposed" panel with an editable textarea.
+   * On save, POSTs the edited text and marks the proposal as accepted.
+   */
+  function openEditor(chapterId, paraIndex) {
+    var proposedEl = document.getElementById('proposed-text-' + chapterId + '-' + paraIndex);
+    if (!proposedEl) return;
+
+    // Already in edit mode?
+    if (proposedEl.querySelector('textarea')) return;
+
+    var currentText = proposedEl.getAttribute('data-raw-text') || proposedEl.innerText.trim();
+    var baseUrl = '/projects/{{ project.id }}/runs/{{ run.id }}/proposals/' + chapterId + '/' + paraIndex;
+
+    // Replace the proposed panel content with a textarea + buttons
+    proposedEl.innerHTML =
+      '<textarea id="edit-textarea-' + chapterId + '-' + paraIndex + '" ' +
+        'class="w-full bg-slate-950 text-slate-200 text-sm font-serif leading-relaxed ' +
+        'border border-blue-600 rounded-lg p-3 focus:outline-none focus:border-blue-400 ' +
+        'resize-y min-h-[6rem]" rows="6">' +
+        escapeHtml(currentText) +
+      '</textarea>' +
+      '<div class="flex items-center gap-2 mt-2">' +
+        '<button onclick="saveEdit(\'' + chapterId + '\', ' + paraIndex + ')" ' +
+          'class="text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white ' +
+          'rounded-lg px-3 py-1.5 transition-colors cursor-pointer">' +
+          '✓ Save &amp; Accept</button>' +
+        '<button onclick="cancelEdit(\'' + chapterId + '\', ' + paraIndex + ')" ' +
+          'class="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer">' +
+          'Cancel</button>' +
+      '</div>';
+
+    // Focus the textarea and put cursor at end
+    var ta = document.getElementById('edit-textarea-' + chapterId + '-' + paraIndex);
+    if (ta) {
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+  }
+
+  function saveEdit(chapterId, paraIndex) {
+    var ta = document.getElementById('edit-textarea-' + chapterId + '-' + paraIndex);
+    if (!ta) return;
+
+    var editedText = ta.value.trim();
+    if (!editedText) return;
+
+    var baseUrl = '/projects/{{ project.id }}/runs/{{ run.id }}/proposals/' + chapterId + '/' + paraIndex;
+    var form = new FormData();
+    form.append('decision', 'edit');
+    form.append('edited_text', editedText);
+
+    fetch(baseUrl, { method: 'POST', body: form })
+      .then(function(resp) { return resp.text(); })
+      .then(function(html) {
+        // Update the proposed text panel
+        var proposedEl = document.getElementById('proposed-text-' + chapterId + '-' + paraIndex);
+        if (proposedEl) {
+          proposedEl.setAttribute('data-raw-text', editedText);
+          proposedEl.className = 'text-sm leading-relaxed font-serif rounded-xl p-4 min-h-[4rem] border ' +
+            'text-emerald-200 bg-emerald-950/30 border-emerald-800/50';
+          proposedEl.innerText = editedText;
+        }
+
+        // Update the action buttons via the HTMX fragment returned
+        var actionsEl = document.getElementById('proposal-actions-' + chapterId + '-' + paraIndex);
+        if (actionsEl) {
+          actionsEl.outerHTML = html;
+          htmx.process(document.getElementById('proposal-actions-' + chapterId + '-' + paraIndex));
+        }
+        refreshCounts();
+      });
+  }
+
+  function cancelEdit(chapterId, paraIndex) {
+    var proposedEl = document.getElementById('proposed-text-' + chapterId + '-' + paraIndex);
+    if (!proposedEl) return;
+
+    var originalText = proposedEl.getAttribute('data-raw-text') || '';
+    // Restore the static text display — figure out the current approved state
+    var actionsEl = document.getElementById('proposal-actions-' + chapterId + '-' + paraIndex);
+    var isAccepted = actionsEl && actionsEl.innerHTML.indexOf('✓ Accepted') >= 0;
+    var isRejected = actionsEl && actionsEl.innerHTML.indexOf('✕ Rejected') >= 0;
+
+    var cls;
+    if (isAccepted) {
+      cls = 'text-sm leading-relaxed font-serif rounded-xl p-4 min-h-[4rem] border text-emerald-200 bg-emerald-950/30 border-emerald-800/50';
+    } else if (isRejected) {
+      cls = 'text-sm leading-relaxed font-serif rounded-xl p-4 min-h-[4rem] border text-slate-600 bg-slate-950/30 border-slate-800 line-through opacity-40';
+    } else {
+      cls = 'text-sm leading-relaxed font-serif rounded-xl p-4 min-h-[4rem] border text-slate-200 bg-slate-950/50 border-slate-700';
+    }
+    proposedEl.className = cls;
+    proposedEl.innerText = originalText;
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+</script>
+{% endblock %}

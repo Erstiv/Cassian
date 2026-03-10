@@ -1,0 +1,557 @@
+{% extends "base.html" %}
+{% set active_page = "copy_line_editor" %}
+
+{% block title %}Copy & Line Editor — {{ project.name }} — Cassian{% endblock %}
+
+{% block head %}
+<style>
+  #run-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(2, 6, 23, 0.85);
+    backdrop-filter: blur(4px);
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1.5rem;
+  }
+  #run-overlay.active {
+    display: flex;
+  }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid #334155;
+    border-top-color: #fbbf24;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+      <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+      <span>›</span>
+      <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+      <span>›</span>
+      <span class="text-slate-400">Copy & Line Editor</span>
+    </div>
+    <h1 class="font-serif text-2xl text-slate-100">Copy &amp; Line Editor</h1>
+    <p class="text-sm text-slate-500 mt-0.5">
+      Grammar, spelling, style consistency (copy) and word choice, rhythm, flow (line)
+    </p>
+  </div>
+
+  {% if status.state != "not_run" and status.generated_at %}
+  <div class="flex items-center gap-3">
+    <span class="text-xs text-slate-600">
+      Last run
+      <span data-localtime="{{ status.generated_at }}" data-localtime-format="date">
+        {{ status.generated_at[:10] if status.generated_at else '' }}
+      </span>
+    </span>
+    <a href="/projects/{{ project.id }}/copy-line-editor/run"
+       onclick="showRunOverlay()"
+       class="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-400
+              border border-amber-500/30 hover:border-amber-400/50
+              px-4 py-2 rounded-lg transition-colors no-underline">
+      Re-run Editor
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── ERROR BANNER ─────────────────────────────────────────────────────────── #}
+{% if error %}
+<div class="mb-6 bg-red-900/30 border border-red-700/50 rounded-xl p-4">
+  <div class="flex items-start gap-3">
+    <span class="text-red-400 text-lg flex-shrink-0">✗</span>
+    <div>
+      <div class="text-sm font-semibold text-red-300 mb-1">Copy & Line Editor failed</div>
+      <pre class="text-xs text-red-400/80 whitespace-pre-wrap font-mono leading-relaxed">{{ error }}</pre>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  STATE: NOT RUN YET                                                         #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{% if status.state == "not_run" %}
+
+<div class="max-w-2xl mx-auto mt-16 text-center">
+  <div class="text-5xl mb-6">✏️</div>
+  <h2 class="font-serif text-2xl text-slate-200 mb-3">No Editing Pass Yet</h2>
+  <p class="text-slate-500 mb-2 leading-relaxed">
+    The Copy &amp; Line Editor goes through every chapter applying mechanical fixes automatically
+    (Tier 1), then sends each chapter to Gemini for paragraph-level prose proposals (Tier 2).
+  </p>
+  <p class="text-slate-600 text-sm mb-8 leading-relaxed">
+    You review and approve each proposal before anything is permanently applied to your manuscript.
+  </p>
+
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-left mb-8">
+    <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">Before you run</h3>
+    <div class="space-y-3">
+      <div class="flex items-start gap-3 text-sm text-slate-500">
+        <span class="text-amber-400 mt-0.5 flex-shrink-0">→</span>
+        <span>Make sure Agent 1 (Intake) has run and your chapters are ingested.</span>
+      </div>
+      <div class="flex items-start gap-3 text-sm text-slate-500">
+        <span class="text-amber-400 mt-0.5 flex-shrink-0">→</span>
+        <span>Optionally run the Consistency Editor and Developmental Editor first — their findings will be included as context.</span>
+      </div>
+      <div class="flex items-start gap-3 text-sm text-slate-500">
+        <span class="text-amber-400 mt-0.5 flex-shrink-0">→</span>
+        <span>Set your creativity level below (1–5). Level 3 is the default.</span>
+      </div>
+      <div class="flex items-start gap-3 text-sm text-slate-500">
+        <span class="text-amber-400 mt-0.5 flex-shrink-0">→</span>
+        <span>Each chapter is sent to Gemini 2.5 Pro. Runtime depends on manuscript length.</span>
+      </div>
+    </div>
+  </div>
+
+  {# Creativity level slider + Tier 1 info #}
+  <div class="grid grid-cols-2 gap-4 mb-8 text-left">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Creativity Level</h3>
+
+      {# Slider #}
+      <div class="mb-4">
+        <input type="range" id="creativity-slider" min="1" max="5" step="1"
+               value="{{ creativity_level }}"
+               class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer
+                      accent-amber-400"
+               oninput="updateCreativityLabel(this.value)">
+        <div class="flex justify-between text-xs text-slate-600 mt-1 px-0.5">
+          <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+        </div>
+      </div>
+
+      {# Current level display (updated by HTMX) #}
+      <div id="creativity-label" class="text-sm mb-3">
+        <span class="text-amber-400 font-semibold">{{ creativity_level }}</span>
+        <span class="text-slate-500 ml-1">—
+          {% if creativity_level == 1 %}Errors only — no rephrasing
+          {% elif creativity_level == 2 %}Errors + minor clarity fixes
+          {% elif creativity_level == 3 %}Errors + flow + tighten prose
+          {% elif creativity_level == 4 %}Active rewriting for rhythm and impact
+          {% elif creativity_level == 5 %}Full prose polish — rewrite freely
+          {% endif %}
+        </span>
+      </div>
+
+      <div id="creativity-saved" class="text-xs text-green-500/70 h-4"></div>
+
+      {# Level guide #}
+      <dl class="space-y-1.5 text-xs mt-3 pt-3 border-t border-slate-800">
+        <div class="flex gap-2 {% if creativity_level == 1 %}text-amber-400{% else %}text-slate-600{% endif %}" data-level="1">
+          <dt class="font-semibold w-4 flex-shrink-0">1</dt>
+          <dd>Errors only — no rephrasing</dd>
+        </div>
+        <div class="flex gap-2 {% if creativity_level == 2 %}text-amber-400{% else %}text-slate-600{% endif %}" data-level="2">
+          <dt class="font-semibold w-4 flex-shrink-0">2</dt>
+          <dd>Errors + minor clarity fixes</dd>
+        </div>
+        <div class="flex gap-2 {% if creativity_level == 3 %}text-amber-400{% else %}text-slate-600{% endif %}" data-level="3">
+          <dt class="font-semibold w-4 flex-shrink-0">3</dt>
+          <dd>Errors + flow + tighten prose</dd>
+        </div>
+        <div class="flex gap-2 {% if creativity_level == 4 %}text-amber-400{% else %}text-slate-600{% endif %}" data-level="4">
+          <dt class="font-semibold w-4 flex-shrink-0">4</dt>
+          <dd>Active rewriting for rhythm and impact</dd>
+        </div>
+        <div class="flex gap-2 {% if creativity_level == 5 %}text-amber-400{% else %}text-slate-600{% endif %}" data-level="5">
+          <dt class="font-semibold w-4 flex-shrink-0">5</dt>
+          <dd>Full prose polish — rewrite freely</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">What Happens When You Run</h3>
+
+      <div class="space-y-2 text-xs text-slate-500 mb-4">
+        <div class="text-slate-400 font-semibold text-xs">Pass 1 — Auto-Fixes</div>
+        <div class="flex items-start gap-2">
+          <span class="text-green-500 mt-0.5 flex-shrink-0">✓</span>
+          <span>Smart quotes, double spaces, trailing whitespace, ellipsis normalisation</span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-green-500 mt-0.5 flex-shrink-0">✓</span>
+          <span>Project-specific find/replace from <code class="bg-slate-800 px-1 rounded">config.json</code></span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-slate-600 mt-0.5 flex-shrink-0">→</span>
+          <span class="text-slate-600">Applied automatically — no review needed</span>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-800">
+        <div class="text-slate-400 font-semibold text-xs mb-2">Pass 2 — AI Editing</div>
+        <div class="space-y-2 text-xs text-slate-500">
+          <div class="flex items-start gap-2">
+            <span class="text-amber-400 mt-0.5 flex-shrink-0">→</span>
+            <span>Each chapter sent to Gemini at your chosen creativity level</span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-green-500 mt-0.5 flex-shrink-0">✓</span>
+            <span><strong class="text-slate-400">Levels 1–2:</strong> auto-applied (mechanical fixes only)</span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-amber-400 mt-0.5 flex-shrink-0">→</span>
+            <span><strong class="text-slate-400">Levels 3–5:</strong> you review and approve each proposal</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <a href="/projects/{{ project.id }}/copy-line-editor/run"
+     onclick="showRunOverlay()"
+     id="run-btn"
+     class="inline-block bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold
+            px-8 py-3 rounded-xl transition-colors text-sm no-underline">
+    ✏️ Run Copy &amp; Line Edit
+  </a>
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  STATE: PROPOSALS PENDING or COMPLETE                                       #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{% else %}
+
+<div class="grid grid-cols-3 gap-6">
+
+  {# ── LEFT: Chapter breakdown (2/3) ──────────────────────────────────── #}
+  <div class="col-span-2 space-y-4">
+
+    {# Status banner #}
+    {% if status.state == "complete" %}
+    <div class="bg-emerald-900/20 border border-emerald-700/40 rounded-xl px-5 py-4 flex items-center gap-3">
+      <span class="text-xl">✅</span>
+      <div>
+        <div class="text-sm font-semibold text-emerald-300">Editing Applied</div>
+        <div class="text-xs text-emerald-600 mt-0.5">All proposals have been reviewed and the accepted edits have been applied to your chapters.</div>
+      </div>
+    </div>
+    {% else %}
+    <div class="bg-amber-900/20 border border-amber-700/40 rounded-xl px-5 py-4 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <span class="text-xl">📋</span>
+        <div>
+          <div class="text-sm font-semibold text-amber-300">Proposals Ready for Review</div>
+          <div class="text-xs text-amber-600 mt-0.5">
+            {{ status.stats.pending }} proposal{{ 's' if status.stats.pending != 1 else '' }} pending
+            review across {{ status.stats.chapters_count }} chapter{{ 's' if status.stats.chapters_count != 1 else '' }}.
+          </div>
+        </div>
+      </div>
+      {% if latest_run %}
+      <a href="/projects/{{ project.id }}/runs/{{ latest_run.id }}/proposals"
+         class="flex-shrink-0 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold
+                px-5 py-2 rounded-lg transition-colors text-sm whitespace-nowrap">
+        Review Proposals →
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Chapter breakdown table #}
+    {% if status.chapters %}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-800">
+        <h2 class="text-sm font-semibold text-slate-200">Chapter Breakdown</h2>
+      </div>
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-slate-800 text-slate-500">
+            <th class="text-left px-5 py-3 font-medium">Chapter</th>
+            <th class="text-left px-4 py-3 font-medium">Proposals</th>
+            <th class="text-left px-4 py-3 font-medium">Review Progress</th>
+            <th class="text-left px-4 py-3 font-medium">Confidence</th>
+            <th class="text-left px-4 py-3 font-medium">Flags</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60">
+          {% for ch in status.chapters %}
+          <tr class="hover:bg-slate-800/30 transition-colors">
+            <td class="px-5 py-3">
+              <div class="text-slate-300 font-medium">Ch {{ ch.chapter_id }}</div>
+              <div class="text-slate-600 truncate max-w-xs" title="{{ ch.title }}">{{ ch.title or '—' }}</div>
+            </td>
+            <td class="px-4 py-3 text-slate-400">{{ ch.total }}</td>
+            <td class="px-4 py-3">
+              {% if ch.total == 0 %}
+                <span class="text-slate-600">—</span>
+              {% else %}
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 bg-slate-800 rounded-full h-1.5 w-20">
+                    <div class="bg-amber-400 h-1.5 rounded-full"
+                         style="width: {{ ((ch.accepted + ch.rejected) / ch.total * 100) | round | int }}%"></div>
+                  </div>
+                  <span class="text-slate-500 whitespace-nowrap">
+                    {{ ch.accepted + ch.rejected }}/{{ ch.total }}
+                  </span>
+                </div>
+                <div class="flex gap-2 mt-1">
+                  {% if ch.accepted > 0 %}
+                  <span class="text-emerald-400">✓ {{ ch.accepted }}</span>
+                  {% endif %}
+                  {% if ch.rejected > 0 %}
+                  <span class="text-red-400">✕ {{ ch.rejected }}</span>
+                  {% endif %}
+                  {% if ch.pending > 0 %}
+                  <span class="text-slate-500">● {{ ch.pending }} pending</span>
+                  {% endif %}
+                </div>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              {% if ch.confidence == "high" %}
+                <span class="text-xs bg-emerald-900/40 text-emerald-400 border border-emerald-700/40 px-2 py-0.5 rounded">High</span>
+              {% elif ch.confidence == "medium" %}
+                <span class="text-xs bg-amber-900/40 text-amber-400 border border-amber-700/40 px-2 py-0.5 rounded">Medium</span>
+              {% elif ch.confidence == "low" %}
+                <span class="text-xs bg-red-900/40 text-red-400 border border-red-700/40 px-2 py-0.5 rounded">Low</span>
+              {% elif ch.confidence == "tier-1-only" %}
+                <span class="text-xs text-slate-600">Tier 1 only</span>
+              {% else %}
+                <span class="text-slate-600">—</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              {% if ch.flagged > 0 %}
+                <span class="text-amber-400">🚩 {{ ch.flagged }}</span>
+              {% else %}
+                <span class="text-slate-600">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {# What happens next #}
+    {% if status.state == "proposals_pending" and latest_run %}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">How to review</h3>
+      <div class="space-y-3">
+        <div class="flex items-start gap-3 text-sm text-slate-500">
+          <span class="text-amber-400 font-semibold flex-shrink-0 w-5">1.</span>
+          <span>Click <strong class="text-slate-300">Review Proposals</strong> to open the proposal review page.</span>
+        </div>
+        <div class="flex items-start gap-3 text-sm text-slate-500">
+          <span class="text-amber-400 font-semibold flex-shrink-0 w-5">2.</span>
+          <span>For each paragraph, you'll see the original and proposed versions side-by-side. Accept or reject each one.</span>
+        </div>
+        <div class="flex items-start gap-3 text-sm text-slate-500">
+          <span class="text-amber-400 font-semibold flex-shrink-0 w-5">3.</span>
+          <span>When done, click <strong class="text-slate-300">Apply &amp; Continue Pipeline</strong> to merge accepted edits into your chapters.</span>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>{# end left col #}
+
+
+  {# ── RIGHT: Stats panel (1/3) ────────────────────────────────────────── #}
+  <div class="space-y-4">
+
+    {# Overall progress card #}
+    {% if status.stats %}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Edit Progress</h2>
+      <dl class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Chapters</dt>
+          <dd class="text-slate-300">{{ status.stats.chapters_count }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Total proposals</dt>
+          <dd class="text-slate-300">{{ status.stats.total_proposals }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Accepted</dt>
+          <dd class="text-emerald-400">{{ status.stats.accepted }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Rejected</dt>
+          <dd class="text-red-400">{{ status.stats.rejected }}</dd>
+        </div>
+        <div class="flex justify-between border-t border-slate-800 pt-2">
+          <dt class="text-slate-500">Pending review</dt>
+          <dd class="{% if status.stats.pending > 0 %}text-amber-400{% else %}text-green-400{% endif %}">
+            {{ status.stats.pending }}
+          </dd>
+        </div>
+      </dl>
+
+      {% if status.stats.total_proposals > 0 %}
+      <div class="mt-4">
+        <div class="flex justify-between text-xs text-slate-600 mb-1">
+          <span>Progress</span>
+          <span>{{ ((status.stats.accepted + status.stats.rejected) / status.stats.total_proposals * 100) | round | int }}%</span>
+        </div>
+        <div class="bg-slate-800 rounded-full h-2">
+          <div class="bg-amber-400 h-2 rounded-full transition-all"
+               style="width: {{ ((status.stats.accepted + status.stats.rejected) / status.stats.total_proposals * 100) | round | int }}%">
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Action buttons #}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Actions</h2>
+      <div class="space-y-2">
+        {% if latest_run and status.state == "proposals_pending" %}
+        <a href="/projects/{{ project.id }}/runs/{{ latest_run.id }}/proposals"
+           class="block w-full text-center text-sm bg-amber-500 hover:bg-amber-400
+                  text-slate-950 font-semibold px-4 py-2.5 rounded-lg transition-colors">
+          Review Proposals →
+        </a>
+        {% endif %}
+        <a href="/projects/{{ project.id }}/copy-line-editor/run"
+           onclick="showRunOverlay()"
+           class="block w-full text-sm text-center bg-slate-800 hover:bg-slate-700 text-slate-300
+                  border border-slate-700 hover:border-slate-600
+                  px-4 py-2.5 rounded-lg transition-colors no-underline">
+          Re-run Copy &amp; Line Edit
+        </a>
+        <p class="text-xs text-slate-600 leading-relaxed text-center mt-1">
+          Re-running will replace existing proposals.
+        </p>
+      </div>
+    </div>
+
+    {# About this editor #}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">How It Works</h2>
+      <div class="space-y-3 text-xs text-slate-600 leading-relaxed">
+        <div>
+          <div class="text-slate-400 font-semibold mb-1">Pass 1 — Auto-Fixes</div>
+          <p>Smart quotes, spacing, ellipsis, and project-specific find/replace from config.json. Applied instantly, no review.</p>
+        </div>
+        <div>
+          <div class="text-slate-400 font-semibold mb-1">Pass 2 — AI Editing</div>
+          <p>Gemini analyses each chapter for grammar, style, word choice, rhythm, and flow at your chosen creativity level.</p>
+        </div>
+        <div class="border-t border-slate-800 pt-2">
+          <div class="text-slate-400 font-semibold mb-1">Creativity Level: <span class="text-amber-400">{{ creativity_level }}</span>/5</div>
+          <p>
+            {% if creativity_level <= 2 %}Levels 1–2 = mechanical fixes, auto-applied.
+            {% else %}Levels 3–5 = you review each proposal before it's applied.{% endif %}
+          </p>
+        </div>
+        <p class="text-slate-700">Does not address plot, structure, or character arcs — those belong to the Developmental Editor.</p>
+      </div>
+    </div>
+
+    {# Changelog link #}
+    {% if status.state != "not_run" %}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Output Files</h2>
+      <div class="space-y-1 text-xs text-slate-600">
+        <div>output/editing/changelog.md</div>
+        <div>output/editing/flags_for_review.md</div>
+        <div>output/editing_proposals/chapter_XX_proposals.json</div>
+        <div>output/editing/chapter_XX_edited.json</div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>{# end right col #}
+
+</div>{# end grid #}
+{% endif %}
+
+{# ── Run overlay (inside content block so it actually renders) ────────── #}
+<div id="run-overlay" class="hidden">
+  <div class="spinner"></div>
+  <div class="text-center">
+    <div class="text-lg font-serif text-amber-400 mb-2">Running Copy & Line Editor…</div>
+    <div class="text-sm text-slate-400">Applying Tier 1 fixes and sending chapters to Gemini.</div>
+    <div class="text-xs text-slate-600 mt-2">This takes 2–5 minutes for a full book.</div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  const creativityLabels = {
+    1: 'Errors only — no rephrasing',
+    2: 'Errors + minor clarity fixes',
+    3: 'Errors + flow + tighten prose',
+    4: 'Active rewriting for rhythm and impact',
+    5: 'Full prose polish — rewrite freely'
+  };
+
+  function updateCreativityLabel(value) {
+    const v = parseInt(value);
+    const label = creativityLabels[v] || '';
+
+    // Update the current level display
+    const labelEl = document.getElementById('creativity-label');
+    if (labelEl) {
+      labelEl.innerHTML =
+        '<span class="text-amber-400 font-semibold">' + v + '</span>' +
+        '<span class="text-slate-500 ml-1">— ' + label + '</span>';
+    }
+
+    // Highlight the matching row in the level guide
+    document.querySelectorAll('[data-level]').forEach(function(el) {
+      if (parseInt(el.getAttribute('data-level')) === v) {
+        el.className = el.className.replace('text-slate-600', 'text-amber-400');
+        if (!el.className.includes('text-amber-400')) {
+          el.classList.add('text-amber-400');
+        }
+      } else {
+        el.className = el.className.replace('text-amber-400', 'text-slate-600');
+      }
+    });
+
+    // Save to server (debounced)
+    clearTimeout(window._creativitySaveTimer);
+    window._creativitySaveTimer = setTimeout(function() {
+      const form = new FormData();
+      form.append('level', v);
+      fetch('/projects/{{ project.id }}/copy-line-editor/creativity', {
+        method: 'POST',
+        body: form
+      }).then(function(r) {
+        if (r.ok) {
+          const saved = document.getElementById('creativity-saved');
+          if (saved) {
+            saved.textContent = '✓ Saved';
+            setTimeout(function() { saved.textContent = ''; }, 1500);
+          }
+        }
+      });
+    }, 400);
+  }
+
+  /* ── Loading overlay ─────────────────────────────────────────────────────── */
+  function showRunOverlay() {
+    const overlay = document.getElementById('run-overlay');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+      overlay.classList.add('active');
+    }
+  }
+</script>
+{% endblock %}

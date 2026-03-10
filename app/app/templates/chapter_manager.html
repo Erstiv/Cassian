@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% set active_page = "chapter_manager" %}
+
+{% block title %}Chapters — {{ project.name }}{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <div class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Chapter Manager</div>
+    <h1 class="text-xl font-semibold text-slate-100 flex items-center gap-2">
+      📑 Chapters
+    </h1>
+    <p class="text-sm text-slate-500 mt-1">Add, remove, rename, reorder, and configure chapters across the pipeline</p>
+  </div>
+  <div class="text-right">
+    <div class="text-sm text-slate-500">{{ project.name }}</div>
+    <div class="text-xs text-slate-600 mt-1">{{ chapters|length }} chapters · {{ "{:,}".format(total_words) }} words</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+
+  {# ── Chapter List (HTMX target) ─────────────────────────────────────────── #}
+  <div id="chapter-list">
+    {% include "fragments/chapter_manager_list.html" %}
+  </div>
+
+  {# ── Add Chapter Panel ──────────────────────────────────────────────────── #}
+  <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-800">
+      <h2 class="text-sm font-semibold text-slate-200 tracking-wide uppercase">Add Chapter</h2>
+    </div>
+
+    <form hx-post="/projects/{{ project.id }}/chapters/add"
+          hx-target="#chapter-list"
+          hx-swap="innerHTML"
+          hx-indicator="#add-spinner"
+          class="p-6 space-y-4">
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {# Title #}
+        <div class="md:col-span-2">
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Title</label>
+          <input type="text" name="title" placeholder="e.g. Character Profiles, Appendix A: Glossary..."
+                 class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200
+                        focus:border-amber-500/70 focus:outline-none focus:ring-1 focus:ring-amber-500/30
+                        placeholder:text-slate-600 transition-colors">
+        </div>
+
+        {# Type #}
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Type</label>
+          <select name="chapter_type"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200
+                         focus:border-amber-500/70 focus:outline-none transition-colors">
+            {% for type_key, type_info in chapter_types.items() %}
+            <option value="{{ type_key }}">{{ type_info.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {# Summary / description #}
+        <div class="md:col-span-2">
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Summary <span class="text-slate-600">(optional — helps AI generation)</span></label>
+          <textarea name="summary" rows="2" placeholder="Brief description of what this chapter covers..."
+                    class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200
+                           focus:border-amber-500/70 focus:outline-none focus:ring-1 focus:ring-amber-500/30
+                           placeholder:text-slate-600 transition-colors resize-none"></textarea>
+        </div>
+
+        {# Position #}
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Position</label>
+          <select name="position"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200
+                         focus:border-amber-500/70 focus:outline-none transition-colors">
+            <option value="end">Add at end</option>
+            {% for ch in chapters %}
+            <option value="{{ ch.number }}">After Ch {{ ch.number }}: {{ ch.title[:40] }}{% if ch.title|length > 40 %}…{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <button type="submit"
+                class="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950
+                       font-semibold py-2 px-5 rounded-lg text-sm transition-colors
+                       disabled:opacity-50 disabled:cursor-wait">
+          + Add Chapter
+        </button>
+        <span id="add-spinner" class="htmx-indicator">
+          <svg class="animate-spin h-5 w-5 text-amber-400 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+        </span>
+      </div>
+    </form>
+  </div>
+
+</div>
+
+{# ── Drag & drop reorder script ──────────────────────────────────────────── #}
+<script>
+function initDragDrop() {
+  const list = document.getElementById('chapter-rows');
+  if (!list) return;
+
+  let dragItem = null;
+
+  list.querySelectorAll('[data-chapter-num]').forEach(row => {
+    row.setAttribute('draggable', 'true');
+
+    row.addEventListener('dragstart', e => {
+      dragItem = row;
+      row.classList.add('opacity-50');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    row.addEventListener('dragend', () => {
+      row.classList.remove('opacity-50');
+      dragItem = null;
+      // Remove all drag-over highlights
+      list.querySelectorAll('.border-t-2').forEach(el => el.classList.remove('border-t-2', 'border-amber-400'));
+    });
+
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      row.classList.add('border-t-2', 'border-amber-400');
+    });
+
+    row.addEventListener('dragleave', () => {
+      row.classList.remove('border-t-2', 'border-amber-400');
+    });
+
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      row.classList.remove('border-t-2', 'border-amber-400');
+      if (dragItem && dragItem !== row) {
+        // Insert before the drop target
+        list.insertBefore(dragItem, row);
+        // Collect new order and submit
+        submitNewOrder();
+      }
+    });
+  });
+}
+
+function submitNewOrder() {
+  const rows = document.querySelectorAll('#chapter-rows [data-chapter-num]');
+  const order = Array.from(rows).map(r => r.dataset.chapterNum).join(',');
+  const projectId = document.getElementById('chapter-rows').dataset.projectId;
+
+  htmx.ajax('POST', `/projects/${projectId}/chapters/reorder`, {
+    target: '#chapter-list',
+    swap: 'innerHTML',
+    values: { order: order }
+  });
+}
+
+// Re-init after HTMX swaps
+document.body.addEventListener('htmx:afterSwap', initDragDrop);
+document.addEventListener('DOMContentLoaded', initDragDrop);
+</script>
+{% endblock %}

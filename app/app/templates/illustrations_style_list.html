@@ -1,0 +1,15 @@
+{#
+  illustrations_style_list.html
+  Full style card grid — used when set-default re-renders all cards.
+  Context: project, styles, edge_choices
+#}
+
+{% if styles %}
+  {% for style in styles %}
+    {% include "illustrations_style_card.html" %}
+  {% endfor %}
+{% else %}
+<div class="col-span-full py-10 text-center">
+  <p class="text-slate-600 text-sm italic">No styles yet. Create one above.</p>
+</div>
+{% endif %}

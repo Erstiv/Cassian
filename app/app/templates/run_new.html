@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block title %}Configure Run — {{ project.name }}{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5">
+  <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+    <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+    <span>›</span>
+    <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+    <span>›</span>
+    <span class="text-slate-400">New Run</span>
+  </div>
+  <h1 class="text-xl font-semibold text-slate-100">Configure Pipeline Run</h1>
+  <p class="text-sm text-slate-500 mt-0.5">Choose which agents to run and how to configure them.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<form method="POST" action="/projects/{{ project.id }}/runs" class="max-w-2xl space-y-6">
+
+  <!-- Run name -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div class="flex items-center gap-4">
+      <div class="flex-1">
+        <label class="block text-sm text-slate-400 mb-1.5" for="run_name">Run name</label>
+        <input type="text" id="run_name" name="run_name"
+               placeholder="e.g. Full run — revised manuscript"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2.5
+                      text-slate-100 placeholder-slate-600 text-sm
+                      focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30
+                      transition-colors" />
+      </div>
+      {% if profiles %}
+      <div class="w-56">
+        <label class="block text-sm text-slate-400 mb-1.5" for="output_profile_id">Output profile</label>
+        <select id="output_profile_id" name="output_profile_id"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2.5
+                       text-slate-100 text-sm
+                       focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30
+                       transition-colors">
+          {% for p in profiles %}
+          <option value="{{ p.id }}" {% if p.is_default %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Agent selection -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div class="mb-4">
+      <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Agents</h2>
+      <p class="text-xs text-slate-500 mt-1">Toggle the agents you want to include. Skip Ingestion if you just want to re-run Layout on already-processed files.</p>
+    </div>
+
+    <div class="space-y-2">
+      {% for agent in agents %}
+      <label class="flex items-start gap-4 p-3.5 rounded-lg border cursor-pointer transition-all
+                    {% if agent.required %}
+                      border-slate-700 bg-slate-800/40 opacity-75 cursor-default
+                    {% else %}
+                      border-slate-700/50 bg-slate-800/20 hover:border-slate-600 hover:bg-slate-800/50
+                    {% endif %}"
+             id="label_agent_{{ agent.num }}">
+
+        <div class="flex items-center pt-0.5">
+          <input type="checkbox"
+                 name="agent_{{ agent.num }}"
+                 id="agent_{{ agent.num }}"
+                 {% if agent.required %}checked disabled{% endif %}
+                 class="w-4 h-4 rounded accent-amber-500 cursor-pointer"
+                 onchange="toggleAgentConfig({{ agent.num }}, this.checked)" />
+        </div>
+
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono text-slate-600 w-5">{{ agent.num }}</span>
+            <span class="text-sm font-medium text-slate-200">{{ agent.name }}</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5 ml-7">{{ agent.desc }}</p>
+        </div>
+
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Editing config (Agent 3) -->
+  <div id="config_agent_3" class="bg-slate-900 border border-slate-800 rounded-xl p-6"
+       style="opacity: 0.4; pointer-events: none;">
+    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-1">Editing — Agent 3</h2>
+    <p class="text-xs text-slate-500 mb-5">Controls how aggressively Agent 3 rewrites your prose.</p>
+
+    <!-- Creativity dial -->
+    <div class="mb-5">
+      <div class="flex items-center justify-between mb-2">
+        <label class="text-sm text-slate-400">Creativity level</label>
+        <span id="creativity_display" class="text-sm font-medium text-amber-400">3 — Prose polish</span>
+      </div>
+      <input type="range" name="creativity_level" id="creativity_level"
+             min="1" max="5" value="3" step="1"
+             class="w-full h-2 bg-slate-700 rounded-full appearance-none cursor-pointer
+                    accent-amber-500"
+             oninput="updateCreativity(this.value)" />
+      <div class="flex justify-between text-xs text-slate-600 mt-1.5">
+        <span>1 — Typos only</span>
+        <span>3 — Prose polish</span>
+        <span>5 — Full rewrite</span>
+      </div>
+    </div>
+
+    <!-- Edit sensitivity dial -->
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <label class="text-sm text-slate-400">Auto-accept threshold</label>
+        <span id="sensitivity_display" class="text-sm font-medium text-amber-400">50% — Balanced</span>
+      </div>
+      <input type="range" name="edit_sensitivity" id="edit_sensitivity"
+             min="0" max="100" value="50" step="5"
+             class="w-full h-2 bg-slate-700 rounded-full appearance-none cursor-pointer
+                    accent-amber-500"
+             oninput="updateSensitivity(this.value)" />
+      <div class="flex justify-between text-xs text-slate-600 mt-1.5">
+        <span>0% — Review everything</span>
+        <span>100% — Auto-accept all</span>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">
+        Changes the AI is highly confident about (above this threshold) are accepted automatically.
+        Everything else goes into a review queue for you to approve or reject one by one.
+      </p>
+    </div>
+  </div>
+
+  <!-- Illustration config (Agent 4) -->
+  <div id="config_agent_4" class="bg-slate-900 border border-slate-800 rounded-xl p-6"
+       style="opacity: 0.4; pointer-events: none;">
+    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-1">Illustrations — Agent 4</h2>
+    <p class="text-xs text-slate-500 mb-5">Controls how images are generated and placed.</p>
+
+    <div class="grid grid-cols-2 gap-4">
+
+      <!-- Provider -->
+      <div>
+        <label class="block text-sm text-slate-400 mb-1.5">Image model</label>
+        <select name="illus_provider"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2.5
+                       text-slate-100 text-sm focus:outline-none focus:border-amber-500
+                       focus:ring-1 focus:ring-amber-500/30 transition-colors">
+          <option value="imagen3">Imagen 3 (Google — default)</option>
+          <option value="grok_flux">Grok / FLUX (best style ref)</option>
+          <option value="dalle3">DALL-E 3 (OpenAI)</option>
+          <option value="flux_replicate">FLUX via Replicate</option>
+        </select>
+      </div>
+
+      <!-- Count per chapter -->
+      <div>
+        <label class="block text-sm text-slate-400 mb-1.5">Images per chapter</label>
+        <select name="illus_count"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2.5
+                       text-slate-100 text-sm focus:outline-none focus:border-amber-500
+                       focus:ring-1 focus:ring-amber-500/30 transition-colors">
+          <option value="0">None (skip illustrations)</option>
+          <option value="1" selected>1 per chapter</option>
+          <option value="2">2 per chapter</option>
+          <option value="3">3 per chapter</option>
+        </select>
+      </div>
+
+      <!-- Placement -->
+      <div>
+        <label class="block text-sm text-slate-400 mb-1.5">Placement</label>
+        <select name="illus_placement"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2.5
+                       text-slate-100 text-sm focus:outline-none focus:border-amber-500
+                       focus:ring-1 focus:ring-amber-500/30 transition-colors">
+          <option value="chapter_header" selected>Chapter header (top of page)</option>
+          <option value="inline">Inline (beside a paragraph)</option>
+          <option value="title_page">Title page only</option>
+          <option value="random">Random (agent picks best moment)</option>
+        </select>
+      </div>
+
+      <!-- Edge style -->
+      <div>
+        <label class="block text-sm text-slate-400 mb-1.5">Edge treatment</label>
+        <select name="illus_edge"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2.5
+                       text-slate-100 text-sm focus:outline-none focus:border-amber-500
+                       focus:ring-1 focus:ring-amber-500/30 transition-colors">
+          <option value="straight" selected>Straight (clean rectangle)</option>
+          <option value="curved">Curved corners</option>
+          <option value="vignette">Vignette (fades to transparent)</option>
+          <option value="tattered">Tattered (rough torn paper)</option>
+          <option value="torn">Torn (dramatic irregular edge)</option>
+          <option value="circular">Circular crop</option>
+        </select>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="flex items-center gap-3 pb-8">
+    <button type="submit"
+            class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold
+                   text-sm px-6 py-2.5 rounded-lg transition-colors flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      Create Run
+    </button>
+    <a href="/projects/{{ project.id }}"
+       class="text-sm text-slate-400 hover:text-slate-200 transition-colors px-3 py-2.5">
+      Cancel
+    </a>
+  </div>
+
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const creativityLabels = {
+    1: "1 — Typos only",
+    2: "2 — Light polish",
+    3: "3 — Prose polish",
+    4: "4 — Deeper rewrites",
+    5: "5 — Full rewrite mode"
+  };
+
+  function updateCreativity(val) {
+    document.getElementById("creativity_display").textContent = creativityLabels[val] || val;
+  }
+
+  function updateSensitivity(val) {
+    const el  = document.getElementById("sensitivity_display");
+    const pct = parseInt(val);
+    let label = "Balanced";
+    if (pct === 0)        label = "Review everything";
+    else if (pct <= 25)   label = "Cautious";
+    else if (pct <= 50)   label = "Balanced";
+    else if (pct <= 75)   label = "Permissive";
+    else if (pct < 100)   label = "Trust the AI";
+    else                  label = "Auto-accept all";
+    el.textContent = `${pct}% — ${label}`;
+  }
+
+  function toggleAgentConfig(num, checked) {
+    const el = document.getElementById(`config_agent_${num}`);
+    if (el) {
+      el.style.opacity  = checked ? "1" : "0.4";
+      el.style.pointerEvents = checked ? "auto" : "none";
+    }
+    // Also visually update the label row
+    const label = document.getElementById(`label_agent_${num}`);
+    if (label) {
+      label.style.opacity = checked ? "1" : "0.5";
+    }
+  }
+</script>
+{% endblock %}

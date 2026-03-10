@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% set active_page = "new_project" %}
+
+{% block title %}New Project — Cassian{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5">
+  <h1 class="text-xl font-semibold text-slate-100">New Project</h1>
+  <p class="text-sm text-slate-500 mt-0.5">Set up a book for the pipeline</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-xl">
+
+  <form method="POST" action="/projects" class="space-y-6">
+
+    <!-- Book details -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+      <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Book Details</h2>
+
+      <div>
+        <label class="block text-sm text-slate-400 mb-1.5" for="name">Title</label>
+        <input type="text" id="name" name="name" required
+               placeholder="One Thousand Perfect Sighs"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2.5
+                      text-slate-100 placeholder-slate-600 text-sm
+                      focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30
+                      transition-colors" />
+      </div>
+
+      <div>
+        <label class="block text-sm text-slate-400 mb-1.5" for="author">Author</label>
+        <input type="text" id="author" name="author" required
+               placeholder="Elliot Stivers"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2.5
+                      text-slate-100 placeholder-slate-600 text-sm
+                      focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30
+                      transition-colors" />
+      </div>
+
+      <div>
+        <label class="block text-sm text-slate-400 mb-1.5" for="description">
+          Description
+          <span class="text-slate-600 font-normal">(optional)</span>
+        </label>
+        <textarea id="description" name="description" rows="3"
+                  placeholder="A brief note about this project..."
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2.5
+                         text-slate-100 placeholder-slate-600 text-sm resize-none
+                         focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30
+                         transition-colors"></textarea>
+      </div>
+    </div>
+
+    <!-- Default output profile -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+          Default Output Profile
+        </h2>
+        <p class="text-xs text-slate-500 mt-1">
+          You can add more profiles (KDP, IngramSpark, etc.) after creating the project.
+        </p>
+      </div>
+
+      <div>
+        <label class="block text-sm text-slate-400 mb-1.5" for="publisher">Publisher</label>
+        <select id="publisher" name="publisher"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2.5
+                       text-slate-100 text-sm
+                       focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30
+                       transition-colors">
+          <option value="lulu">Lulu</option>
+          <option value="ingram_spark">IngramSpark</option>
+          <option value="kdp">Amazon KDP</option>
+          <option value="draft2digital">Draft2Digital</option>
+          <option value="generic">Custom / Generic</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm text-slate-400 mb-1.5" for="book_format">Format</label>
+        <select id="book_format" name="book_format"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2.5
+                       text-slate-100 text-sm
+                       focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30
+                       transition-colors">
+          <option value="hardcover_casewrap">Hardcover (casewrap) — 6″ × 9″</option>
+          <option value="hardcover_dustjacket">Hardcover (dust jacket) — 6″ × 9″</option>
+          <option value="trade_paperback">Trade Paperback — 6″ × 9″</option>
+          <option value="mass_market_pb">Mass Market Paperback — 4.25″ × 6.87″</option>
+          <option value="ebook_epub">eBook (EPUB)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center gap-3">
+      <button type="submit"
+              class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-medium
+                     text-sm px-5 py-2.5 rounded-lg transition-colors">
+        Create Project
+      </button>
+      <a href="/"
+         class="text-sm text-slate-400 hover:text-slate-200 transition-colors px-3 py-2.5">
+        Cancel
+      </a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

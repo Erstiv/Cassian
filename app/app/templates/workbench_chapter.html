@@ -1,0 +1,62 @@
+{#
+  HTMX FRAGMENT — loaded into #editor-panel via hx-swap="innerHTML"
+  Context: project, chapter, chapter_key, source_label, has_working_copy
+#}
+
+{# ── Chapter header ── #}
+<div class="sticky top-0 z-10 bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between gap-4">
+  <div class="min-w-0">
+    <h2 class="text-base font-semibold text-slate-100 truncate">{{ chapter.title }}</h2>
+    <div class="flex items-center gap-2 mt-1 flex-wrap">
+      {# Source badge #}
+      {% if source_label == "working copy" %}
+      <span class="text-xs px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-400 border border-amber-700/50">
+        ✏️ Working copy
+      </span>
+      {% elif source_label == "edited" %}
+      <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-900/30 text-emerald-400 border border-emerald-700/50">
+        ✓ From: copy editor
+      </span>
+      {% else %}
+      <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+        From: ingested
+      </span>
+      {% endif %}
+
+      {# Paragraph count #}
+      <span class="text-xs text-slate-600">{{ chapter.paragraphs | length }} paragraphs</span>
+
+      {# Last modified #}
+      {% if chapter.last_modified %}
+      <span class="text-xs text-slate-700"
+            data-localtime="{{ chapter.last_modified }}"
+            data-localtime-format="full">{{ chapter.last_modified }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Reset button (only if working copy exists) #}
+  {% if has_working_copy %}
+  <button
+    hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/reset"
+    hx-target="#editor-panel"
+    hx-swap="innerHTML"
+    hx-confirm="Discard all changes and revert to the original source? This cannot be undone."
+    class="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-red-900/30 hover:bg-red-900/60
+           text-red-400 hover:text-red-300 border border-red-800/40 transition-colors cursor-pointer"
+  >
+    ↺ Reset to original
+  </button>
+  {% endif %}
+</div>
+
+{# ── Paragraph list ── #}
+<div class="p-6" id="paragraphs-list">
+  {% if not chapter.paragraphs %}
+  <div class="py-12 text-center text-slate-500 text-sm">No paragraphs found in this chapter.</div>
+  {% else %}
+  {% for para in chapter.paragraphs %}
+    {% include "workbench_para.html" %}
+  {% endfor %}
+  {% endif %}
+</div>

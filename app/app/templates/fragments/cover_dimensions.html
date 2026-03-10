@@ -1,0 +1,147 @@
+{#
+  cover_dimensions.html — HTMX fragment
+  Rendered by:
+    GET  /projects/{id}/cover/dimensions   (HTMX refresh)
+    Included in cover_config_panel.html    (initial + after profile save)
+  Swapped into:  #cover-dimensions-panel
+#}
+
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+  <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">
+    📐 Cover Dimensions
+  </h2>
+
+  {% if not output_profile %}
+    {# No profile yet — prompt to set one up #}
+    <div class="flex flex-col items-center justify-center h-48 text-center">
+      <div class="text-slate-600 text-3xl mb-3">📋</div>
+      <div class="text-sm text-slate-500">Save your publisher profile first</div>
+      <div class="text-xs text-slate-600 mt-1">Spine and dimensions will appear here</div>
+    </div>
+
+  {% else %}
+
+    {# ── Page count + spine stats ──────────────────────────────────────────── #}
+    <div class="space-y-2 mb-4 text-sm">
+      <div class="flex justify-between">
+        <span class="text-slate-500">Interior pages:</span>
+        {% if page_count %}
+          <span class="text-slate-200 font-medium">{{ page_count }}
+            <span class="text-xs text-slate-500">(from layout report)</span>
+          </span>
+        {% else %}
+          <span class="text-amber-400 text-xs">Unknown — run Layout agent first</span>
+        {% endif %}
+      </div>
+
+      <div class="flex justify-between">
+        <span class="text-slate-500">Paper type:</span>
+        <span class="text-slate-200">
+          {{ output_profile.paper_type | title }}
+          {% if output_profile.paper_type == 'cream' %}
+            <span class="text-xs text-slate-500">(0.0025" / page)</span>
+          {% else %}
+            <span class="text-xs text-slate-500">(0.002252" / page)</span>
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="flex justify-between">
+        <span class="text-slate-500">Spine width:</span>
+        {% if spine_width %}
+          <span class="text-slate-100 font-semibold">{{ "%.4f"|format(spine_width) }}"</span>
+        {% elif page_count %}
+          <span class="text-slate-500">—</span>
+        {% else %}
+          <span class="text-slate-600 text-xs italic">needs page count</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ── Manual page count entry (shown when no layout report) ─────────────── #}
+    {% if not page_count %}
+    <form
+      hx-get="/projects/{{ project.id }}/cover/dimensions"
+      hx-target="#cover-dimensions-panel"
+      hx-swap="outerHTML"
+      class="mb-4"
+    >
+      <div class="bg-amber-900/20 border border-amber-700/40 rounded-lg p-3 mb-3">
+        <div class="flex items-start gap-2">
+          <span class="text-amber-400 flex-shrink-0">⚠</span>
+          <div class="text-xs text-amber-300/80">
+            Run the Layout agent first for an accurate page count.
+            You can enter an estimate below.
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="number" name="manual_page_count" placeholder="e.g. 320"
+               class="flex-1 bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500" />
+        <button type="submit"
+                class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm rounded-lg transition-colors whitespace-nowrap">
+          Estimate
+        </button>
+      </div>
+    </form>
+    {% endif %}
+
+    {# ── Wraparound diagram ─────────────────────────────────────────────────── #}
+    {% if cover_dims %}
+      {% set cd = cover_dims %}
+      <div class="cover-diagram mb-3" style="min-height: 80px;">
+        {# Back panel #}
+        <div class="cover-back flex flex-col items-center justify-between p-2"
+             title="Back cover ({{ '%.3f'|format(cd.back_w) }}&quot; × {{ '%.3f'|format(cd.total_h) }}&quot;)">
+          <div class="text-xs text-blue-300 font-medium">BACK</div>
+          <div class="text-xs text-blue-400">{{ "%.3f"|format(cd.back_w) }}"</div>
+        </div>
+
+        {# Spine panel #}
+        <div class="cover-spine flex flex-col items-center justify-between px-1 py-2"
+             style="width: max(40px, {{ [cd.spine_w * 60, 40] | max }}px);"
+             title="Spine ({{ '%.4f'|format(cd.spine_w) }}&quot;)">
+          <div class="text-xs text-slate-400 [writing-mode:vertical-rl] rotate-180 whitespace-nowrap">SPINE</div>
+          <div class="text-xs text-slate-500 [writing-mode:vertical-rl] rotate-180 whitespace-nowrap">{{ "%.4f"|format(cd.spine_w) }}"</div>
+        </div>
+
+        {# Front panel #}
+        <div class="cover-front flex flex-col items-center justify-between p-2"
+             title="Front cover ({{ '%.3f'|format(cd.front_w) }}&quot; × {{ '%.3f'|format(cd.total_h) }}&quot;)">
+          <div class="text-xs text-blue-300 font-medium">FRONT</div>
+          <div class="text-xs text-blue-400">{{ "%.3f"|format(cd.front_w) }}"</div>
+        </div>
+      </div>
+
+      {# Dimension summary #}
+      <div class="space-y-1 text-xs text-slate-500 border-t border-slate-800 pt-3">
+        {% if cd.cover_type == 'wraparound' %}
+          <div class="flex justify-between">
+            <span>Total wraparound:</span>
+            <span class="text-slate-300 font-medium">
+              {{ "%.3f"|format(cd.total_w) }}" × {{ "%.3f"|format(cd.total_h) }}"
+            </span>
+          </div>
+        {% endif %}
+        <div class="flex justify-between">
+          <span>Front panel:</span>
+          <span class="text-slate-400">{{ "%.3f"|format(cd.front_w) }}" × {{ "%.3f"|format(cd.total_h) }}"</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Back panel:</span>
+          <span class="text-slate-400">{{ "%.3f"|format(cd.back_w) }}" × {{ "%.3f"|format(cd.total_h) }}"</span>
+        </div>
+        {% if spine_width %}
+        <div class="flex justify-between">
+          <span>Spine width:</span>
+          <span class="text-slate-400">{{ "%.4f"|format(spine_width) }}"</span>
+        </div>
+        {% endif %}
+        <div class="text-slate-600 mt-1">
+          Includes {{ output_profile.bleed_inches }}" bleed on all sides
+        </div>
+      </div>
+
+    {% endif %}{# end cover_dims #}
+  {% endif %}{# end output_profile #}
+</div>

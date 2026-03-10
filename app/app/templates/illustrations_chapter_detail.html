@@ -1,0 +1,315 @@
+{#
+  illustrations_chapter_detail.html
+  Full chapter detail panel — loaded into #chapter-detail-panel via HTMX.
+  Shows scene analysis on the left, generated image on the right.
+
+  Context:
+    project       — Project
+    chapter       — Chapter
+    illustration  — Illustration | None
+    default_style — IllustrationStyle | None
+#}
+
+{% set ch_key  = chapter.chapter_key %}
+{% set ch_title = chapter.title or ('Chapter ' + ch_key) %}
+
+<div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+
+  {# ── Panel header ── #}
+  <div class="border-b border-slate-800 px-6 py-4 flex items-center justify-between gap-4">
+    <div>
+      <div class="text-xs text-slate-600 uppercase tracking-wider mb-0.5">Chapter Detail</div>
+      <h3 class="text-base font-semibold text-slate-100 leading-snug">
+        {% if chapter.chapter_number %}
+          <span class="text-slate-500 font-normal">Ch. {{ chapter.chapter_number }} — </span>
+        {% endif %}
+        {{ ch_title }}
+      </h3>
+    </div>
+
+    <div class="flex items-center gap-2 flex-shrink-0">
+      {# Active style badge #}
+      {% if default_style %}
+      <span class="text-xs px-2.5 py-1 rounded-lg border border-amber-400/30 text-amber-400/80">
+        🎨 {{ default_style.name }}
+      </span>
+      {% else %}
+      <span class="text-xs px-2.5 py-1 rounded-lg border border-slate-700 text-slate-600"
+            title="Set a default style in the Style Ledger above">
+        No default style
+      </span>
+      {% endif %}
+
+      {# ── Model Toggle ── #}
+      <div class="flex items-center gap-1 text-xs">
+        <span class="text-slate-600 mr-1">Model:</span>
+        <div id="model-toggle" class="inline-flex rounded-lg border border-slate-700 overflow-hidden">
+          <button onclick="setModel('pro')" id="model-btn-pro"
+                  class="px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer
+                         bg-violet-600/80 text-white border-r border-slate-700">
+            Pro
+          </button>
+          <button onclick="setModel('flash')" id="model-btn-flash"
+                  class="px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer
+                         bg-slate-800 text-slate-500 hover:text-slate-300">
+            Flash
+          </button>
+        </div>
+      </div>
+
+      {# Back button — clears the detail panel #}
+      <button
+        onclick="document.getElementById('chapter-detail-panel').innerHTML=''"
+        class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+               border border-slate-700 text-slate-400
+               hover:border-slate-500 hover:text-slate-200 transition-colors cursor-pointer">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        Gallery
+      </button>
+    </div>
+  </div>
+
+  {# Hidden input carries the selected model tier #}
+  <input type="hidden" id="model-tier" name="model_tier" value="pro">
+  {# Hidden input carries the scene nudge text #}
+  <input type="hidden" id="scene-nudge" name="scene_nudge" value="">
+
+  {# ── Two-column body ── #}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-slate-800">
+
+    {# ════════════════════════════════════════════════
+       LEFT PANEL — Scene Analysis
+    ════════════════════════════════════════════════ #}
+    <div class="p-6 flex flex-col gap-4">
+
+      <div class="flex items-center justify-between">
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          Scene Analysis
+        </h4>
+      </div>
+
+      {# ── Scene nudge ── #}
+      <div class="mb-1">
+        <label class="text-xs text-slate-600 block mb-1">Scene guidance <span class="text-slate-700">(optional)</span></label>
+        <input type="text" id="scene-nudge-input"
+               placeholder="e.g. 'find a scene with a woman' or 'focus on the landscape'"
+               oninput="document.getElementById('scene-nudge').value = this.value"
+               class="w-full text-xs px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700/50
+                      text-slate-300 placeholder-slate-600
+                      focus:border-violet-500/50 focus:outline-none transition-colors" />
+      </div>
+
+      <div class="flex items-center justify-end">
+        {% if illustration and illustration.prompt_data %}
+        {# Re-analyze button — overwrites the analysis panel #}
+        <button
+          hx-post="/projects/{{ project.id }}/illustrations/chapter/{{ ch_key }}/analyze"
+          hx-target="#scene-analysis-panel"
+          hx-swap="innerHTML"
+          hx-indicator="#analyze-spinner"
+          hx-include="#model-tier, #scene-nudge"
+          class="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg
+                 border border-slate-700 text-slate-400
+                 hover:border-violet-400/60 hover:text-violet-400 transition-colors cursor-pointer">
+          Re-analyze
+          <svg id="analyze-spinner" class="htmx-indicator w-3 h-3 animate-spin"
+               fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+        </button>
+        {% endif %}
+      </div>
+
+      {# Analysis panel — populated by initial data or HTMX refresh #}
+      <div id="scene-analysis-panel">
+
+        {% if illustration and illustration.prompt_data and illustration.prompt_data.get('image_prompt') %}
+          {# Show existing analysis #}
+          {% set pd = illustration.prompt_data %}
+
+          {% if pd.get('scene') %}
+          <div class="mb-4">
+            <div class="text-xs text-slate-600 uppercase tracking-wider mb-1.5">Scene</div>
+            <p class="text-sm text-slate-300 leading-relaxed">{{ pd.scene }}</p>
+          </div>
+          {% endif %}
+
+          {% if pd.get('mood_tags') %}
+          <div class="mb-4">
+            <div class="text-xs text-slate-600 uppercase tracking-wider mb-1.5">Mood</div>
+            <div class="flex flex-wrap gap-1.5">
+              {% for tag in pd.mood_tags %}
+              <span class="px-2 py-0.5 rounded-full text-xs bg-violet-400/10 border border-violet-400/30 text-violet-300">
+                {{ tag }}
+              </span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          {% if pd.get('characters') and pd.characters != 'NONE' %}
+          <div class="mb-4">
+            <div class="text-xs text-slate-600 uppercase tracking-wider mb-1.5">Characters</div>
+            <p class="text-xs text-slate-400">{{ pd.characters }}</p>
+          </div>
+          {% endif %}
+
+          <div class="mb-4">
+            <div class="text-xs text-slate-600 uppercase tracking-wider mb-1.5">Image Prompt</div>
+            <div class="bg-slate-800/60 border border-slate-700/50 rounded-lg p-3">
+              <p class="text-xs text-slate-300 leading-relaxed font-mono">{{ pd.get('image_prompt', '') }}</p>
+            </div>
+          </div>
+
+          {% if pd.get('negative_prompt') %}
+          <div class="mb-4">
+            <div class="text-xs text-red-500/70 uppercase tracking-wider mb-1.5">Avoid</div>
+            <p class="text-xs text-slate-500 italic">{{ pd.negative_prompt }}</p>
+          </div>
+          {% endif %}
+
+          {# Generate Image button — only show if no image yet or rejected #}
+          {% set ill_status = illustration.status.value if illustration else 'not_started' %}
+          {% if ill_status in ('pending', 'rejected', 'not_started') %}
+          <button
+            hx-post="/projects/{{ project.id }}/illustrations/chapter/{{ ch_key }}/generate"
+            hx-target="#image-result-panel"
+            hx-swap="innerHTML"
+            hx-indicator="#gen-spinner"
+            hx-include="#model-tier"
+            hx-disabled-elt="this"
+            class="flex items-center gap-2 w-full justify-center text-sm px-4 py-2.5 rounded-xl
+                   bg-amber-400 text-slate-950 font-semibold hover:bg-amber-300
+                   transition-colors cursor-pointer mt-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            Generate Image
+            <svg id="gen-spinner" class="htmx-indicator w-4 h-4 animate-spin"
+                 fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+          </button>
+          {% endif %}
+
+        {% else %}
+          {# No analysis yet — show Analyze button #}
+          <div class="flex flex-col items-center justify-center py-12 gap-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center">
+              <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="text-sm font-medium text-slate-400">No analysis yet</div>
+              <div class="text-xs text-slate-600 mt-1">AI will read the chapter and select the best visual moment</div>
+            </div>
+            <button
+              hx-post="/projects/{{ project.id }}/illustrations/chapter/{{ ch_key }}/analyze"
+              hx-target="#scene-analysis-panel"
+              hx-swap="innerHTML"
+              hx-indicator="#analyze-btn-spinner"
+              hx-include="#model-tier, #scene-nudge"
+              hx-disabled-elt="this"
+              class="flex items-center gap-2 text-sm px-5 py-2.5 rounded-xl
+                     bg-violet-600 text-white font-medium hover:bg-violet-500
+                     transition-colors cursor-pointer">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+              Analyze Chapter
+              <svg id="analyze-btn-spinner" class="htmx-indicator w-4 h-4 animate-spin"
+                   fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+            </button>
+            <p class="text-xs text-slate-700" id="model-hint">Uses Gemini Pro · takes ~10 seconds</p>
+          </div>
+        {% endif %}
+
+      </div>{# end #scene-analysis-panel #}
+    </div>
+
+    {# ════════════════════════════════════════════════
+       RIGHT PANEL — Generated Image
+    ════════════════════════════════════════════════ #}
+    <div class="p-6 flex flex-col gap-4">
+
+      <div class="flex items-center justify-between">
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          Generated Image
+        </h4>
+        {% if illustration and illustration.attempts %}
+        <span class="text-xs text-slate-600">
+          Attempt {{ illustration.attempts }}
+        </span>
+        {% endif %}
+      </div>
+
+      {# Image result panel — populated by generate / regenerate HTMX swaps #}
+      <div id="image-result-panel">
+
+        {% set ill_status = illustration.status.value if illustration else 'not_started' %}
+
+        {% if illustration and illustration.raw_image_path %}
+          {# Image exists — render inline via the image result fragment logic #}
+          {% include "illustrations_image_result.html" %}
+
+        {% elif ill_status == 'generating' or ill_status == 'regenerating' %}
+          {# In progress #}
+          <div class="flex flex-col items-center justify-center py-16 gap-3 text-center">
+            <svg class="w-8 h-8 text-amber-400 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <p class="text-sm text-amber-400">Generating…</p>
+          </div>
+
+        {% else %}
+          {# No image yet — placeholder #}
+          <div class="flex flex-col items-center justify-center py-16 gap-3 text-center
+                      border-2 border-dashed border-slate-700/50 rounded-xl">
+            <svg class="w-12 h-12 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <p class="text-sm text-slate-600">Image will appear here after generation</p>
+            <p class="text-xs text-slate-700">Analyze the chapter first, then generate</p>
+          </div>
+        {% endif %}
+
+      </div>{# end #image-result-panel #}
+    </div>
+
+  </div>{# end two-column body #}
+</div>
+
+<script>
+function setModel(tier) {
+  document.getElementById('model-tier').value = tier;
+  const proBtn   = document.getElementById('model-btn-pro');
+  const flashBtn = document.getElementById('model-btn-flash');
+  const hint     = document.getElementById('model-hint');
+
+  const active   = 'bg-violet-600/80 text-white';
+  const inactive = 'bg-slate-800 text-slate-500 hover:text-slate-300';
+  const base     = 'px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer';
+
+  proBtn.className   = base + ' border-r border-slate-700 ' + (tier === 'pro' ? active : inactive);
+  flashBtn.className = base + ' ' + (tier === 'flash' ? active : inactive);
+
+  if (hint) {
+    hint.textContent = tier === 'pro'
+      ? 'Uses Gemini Pro \u00b7 takes ~10 seconds'
+      : 'Uses Gemini Flash \u00b7 faster, lighter';
+  }
+}
+</script>

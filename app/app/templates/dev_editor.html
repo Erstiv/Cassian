@@ -1,0 +1,878 @@
+{% extends "base.html" %}
+{% set active_page = "dev_editor" %}
+
+{% block title %}Developmental Editor — {{ project.name }} — Cassian{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+      <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+      <span>›</span>
+      <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+      <span>›</span>
+      <span class="text-slate-400">Developmental Editor</span>
+    </div>
+    <h1 class="font-serif text-2xl text-slate-100">Developmental Editor</h1>
+    <p class="text-sm text-slate-500 mt-0.5">
+      Big-picture structural analysis: plot, pacing, characters, and theme
+    </p>
+  </div>
+
+  {% if has_report %}
+  <div class="flex items-center gap-3">
+    <span class="text-xs text-slate-600">
+      Report generated
+      <span data-localtime="{{ stats.generated_at }}" data-localtime-format="date">{{ stats.generated_at[:10] if stats.generated_at else '' }}</span>
+    </span>
+    <a href="/projects/{{ project.id }}/dev-editor/run"
+       onclick="showRunOverlay()"
+       class="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-400
+              border border-amber-500/30 hover:border-amber-400/50
+              px-4 py-2 rounded-lg transition-colors no-underline">
+      Re-run Analysis
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+  #run-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(2, 6, 23, 0.85);
+    backdrop-filter: blur(4px);
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1.5rem;
+  }
+  #run-overlay.active {
+    display: flex;
+  }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid #334155;
+    border-top-color: #fbbf24;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Smooth transitions for HTMX fix-panel swaps */
+  [id^="fix-panel-"] > div {
+    animation: fadeSlideIn 300ms ease;
+  }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── ERROR BANNER ─────────────────────────────────────────────────────────── #}
+{% if error %}
+<div class="mb-6 bg-red-900/30 border border-red-700/50 rounded-xl p-4">
+  <div class="flex items-start gap-3">
+    <span class="text-red-400 text-lg flex-shrink-0">✗</span>
+    <div>
+      <div class="text-sm font-semibold text-red-300 mb-1">Developmental edit failed</div>
+      <pre class="text-xs text-red-400/80 whitespace-pre-wrap font-mono leading-relaxed">{{ error }}</pre>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if not has_report %}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  EMPTY STATE — no report yet                                                #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+<div class="max-w-2xl mx-auto mt-16 text-center">
+  <div class="text-5xl mb-6">🔍</div>
+  <h2 class="font-serif text-2xl text-slate-200 mb-3">No Developmental Report Yet</h2>
+  <p class="text-slate-500 mb-2 leading-relaxed">
+    The Developmental Editor reads your entire manuscript and evaluates the big picture:
+    plot arc, pacing, character development, POV, theme, and chapter-by-chapter structure.
+  </p>
+  <p class="text-slate-600 text-sm mb-8 leading-relaxed">
+    This agent is <strong class="text-slate-500">advisory only</strong> — it produces a report for you
+    to read and act on. It does not modify any chapter files.
+  </p>
+
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-left mb-8">
+    <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Before you run</h3>
+    <ul class="space-y-2 text-sm text-slate-500">
+      <li class="flex items-start gap-2">
+        <span class="text-amber-400 mt-0.5">→</span>
+        Make sure Agent 1 (Intake) has run and your chapters are ingested.
+      </li>
+      <li class="flex items-start gap-2">
+        <span class="text-amber-400 mt-0.5">→</span>
+        Optionally run the Consistency Editor first — its findings will be included as context.
+      </li>
+      <li class="flex items-start gap-2">
+        <span class="text-amber-400 mt-0.5">→</span>
+        This sends your full manuscript to Gemini 2.5 Pro — typically takes 1–3 minutes.
+      </li>
+    </ul>
+  </div>
+
+  <a href="/projects/{{ project.id }}/dev-editor/run"
+     onclick="showRunOverlay()"
+     class="inline-block bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold
+            px-8 py-3 rounded-xl transition-colors text-sm no-underline">
+    Run Developmental Edit
+  </a>
+</div>
+
+{% else %}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  REPORT EXISTS — show the full analysis                                     #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+
+<div class="grid grid-cols-3 gap-6">
+
+  {# ── LEFT: Full report (2/3) ────────────────────────────────────────── #}
+  <div class="col-span-2 space-y-4">
+
+    {# ─ Overall Assessment ─ #}
+    {% set oa = report.overall_assessment %}
+    <details class="bg-slate-900 border border-slate-800 rounded-xl" open>
+      <summary class="px-5 py-4 flex items-center justify-between cursor-pointer
+                      hover:bg-slate-800/40 rounded-xl transition-colors select-none">
+        <div class="flex items-center gap-3">
+          <span class="text-lg">📋</span>
+          <h2 class="text-sm font-semibold text-slate-200">Overall Assessment</h2>
+        </div>
+        <span class="text-slate-600 text-xs">click to collapse</span>
+      </summary>
+      <div class="px-5 pb-5 space-y-4">
+        <p class="text-sm text-slate-400 leading-relaxed">{{ oa.summary }}</p>
+
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-500">Readiness:</span>
+          {% set r = oa.readiness_level %}
+          {% if r == 'publication_ready' %}
+            <span class="text-xs bg-green-900/40 text-green-400 border border-green-700/40 px-2.5 py-1 rounded-lg">✅ Publication Ready</span>
+          {% elif r == 'nearly_ready' %}
+            <span class="text-xs bg-teal-900/40 text-teal-400 border border-teal-700/40 px-2.5 py-1 rounded-lg">🟢 Nearly Ready</span>
+          {% elif r == 'needs_work' %}
+            <span class="text-xs bg-amber-900/40 text-amber-400 border border-amber-700/40 px-2.5 py-1 rounded-lg">🟡 Needs Work</span>
+          {% else %}
+            <span class="text-xs bg-red-900/40 text-red-400 border border-red-700/40 px-2.5 py-1 rounded-lg">🔴 Early Draft</span>
+          {% endif %}
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <h3 class="text-xs font-semibold text-green-400 uppercase tracking-wider mb-2">Strengths</h3>
+            <ul class="space-y-1.5">
+              {% for s in oa.strengths %}
+              <li class="text-xs text-slate-400 flex items-start gap-2">
+                <span class="text-green-500 mt-0.5">✓</span> {{ s }}
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          <div>
+            <h3 class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Areas to Improve</h3>
+            <ul class="space-y-1.5">
+              {% for w in oa.weaknesses %}
+              <li class="text-xs text-slate-400 flex items-start gap-2">
+                <span class="text-amber-500 mt-0.5">→</span> {{ w }}
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+
+        {% if oa.recommended_next_steps %}
+        <div>
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Recommended Next Steps</h3>
+          <ol class="space-y-1.5">
+            {% for step in oa.recommended_next_steps %}
+            <li class="text-xs text-slate-400 flex items-start gap-2">
+              <span class="text-amber-400 font-semibold flex-shrink-0">{{ loop.index }}.</span> {{ step }}
+            </li>
+            {% endfor %}
+          </ol>
+        </div>
+        {% endif %}
+      </div>
+    </details>
+
+    {# ─ Plot Analysis ─ #}
+    {% set pa = report.plot_analysis %}
+    <details class="bg-slate-900 border border-slate-800 rounded-xl">
+      <summary class="px-5 py-4 flex items-center justify-between cursor-pointer
+                      hover:bg-slate-800/40 rounded-xl transition-colors select-none">
+        <div class="flex items-center gap-3">
+          <span class="text-lg">🎭</span>
+          <h2 class="text-sm font-semibold text-slate-200">Plot Analysis</h2>
+          {% if pa.plot_holes %}
+          <span class="text-xs text-red-400 bg-red-900/30 border border-red-800/40 px-2 py-0.5 rounded">
+            {{ pa.plot_holes | length }} hole{{ 's' if pa.plot_holes | length != 1 else '' }}
+          </span>
+          {% endif %}
+        </div>
+        <span class="text-slate-600 text-xs">click to expand</span>
+      </summary>
+      <div class="px-5 pb-5 space-y-4">
+        <div class="space-y-3">
+          <div class="p-3 bg-slate-800/40 rounded-lg">
+            <div class="text-xs font-medium text-slate-400 mb-1">Story Arc</div>
+            <p class="text-xs text-slate-300 leading-relaxed">{{ pa.arc_assessment }}</p>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="p-3 bg-slate-800/40 rounded-lg">
+              <div class="text-xs font-medium text-slate-400 mb-1">Climax</div>
+              <p class="text-xs text-slate-300 leading-relaxed">{{ pa.climax_assessment }}</p>
+            </div>
+            <div class="p-3 bg-slate-800/40 rounded-lg">
+              <div class="text-xs font-medium text-slate-400 mb-1">Resolution</div>
+              <p class="text-xs text-slate-300 leading-relaxed">{{ pa.resolution_assessment }}</p>
+            </div>
+          </div>
+        </div>
+
+        {% if pa.plot_holes %}
+        <div>
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Plot Holes</h3>
+          <div class="space-y-2">
+            {% for hole in pa.plot_holes %}
+            <div class="p-3 bg-slate-800/60 border border-slate-700/50 rounded-lg">
+              <div class="flex items-center gap-2 mb-1">
+                {% if hole.severity == 'high' %}
+                  <span class="text-xs text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded">High</span>
+                {% elif hole.severity == 'medium' %}
+                  <span class="text-xs text-amber-400 bg-amber-900/30 px-1.5 py-0.5 rounded">Medium</span>
+                {% else %}
+                  <span class="text-xs text-green-400 bg-green-900/30 px-1.5 py-0.5 rounded">Low</span>
+                {% endif %}
+                {% if hole.chapters_affected %}
+                  <span class="text-xs text-slate-600">Ch {{ hole.chapters_affected | join(', ') }}</span>
+                {% endif %}
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed mb-1">{{ hole.description }}</p>
+              {% if hole.suggested_approach %}
+              <p class="text-xs text-slate-500"><em>Approach: {{ hole.suggested_approach }}</em></p>
+              {% endif %}
+
+              {# Auto-Fix button #}
+              {% if hole.chapters_affected %}
+              <div class="mt-2">
+                <form hx-post="/projects/{{ project.id }}/dev-editor/fix/preview"
+                      hx-target="#fix-panel-plot_hole-{{ loop.index0 }}"
+                      hx-swap="innerHTML"
+                      hx-indicator="#fix-spinner-plot_hole-{{ loop.index0 }}">
+                  <input type="hidden" name="issue_type" value="plot_hole">
+                  <input type="hidden" name="issue_index" value="{{ loop.index0 }}">
+                  <button type="submit"
+                          class="flex items-center gap-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20
+                                 text-amber-400 border border-amber-500/30 hover:border-amber-400/50
+                                 py-1 px-3 rounded-lg transition-colors">
+                    <span>🔧</span>
+                    <span>Auto-Fix</span>
+                  </button>
+                </form>
+                <span id="fix-spinner-plot_hole-{{ loop.index0 }}"
+                      class="htmx-indicator text-xs text-amber-400 ml-2">
+                  Generating fix…
+                </span>
+              </div>
+              <div id="fix-panel-plot_hole-{{ loop.index0 }}"></div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </details>
+
+    {# ─ Pacing Analysis ─ #}
+    {% set pac = report.pacing_analysis %}
+    <details class="bg-slate-900 border border-slate-800 rounded-xl">
+      <summary class="px-5 py-4 flex items-center justify-between cursor-pointer
+                      hover:bg-slate-800/40 rounded-xl transition-colors select-none">
+        <div class="flex items-center gap-3">
+          <span class="text-lg">⏱</span>
+          <h2 class="text-sm font-semibold text-slate-200">Pacing Analysis</h2>
+          {% if stats.pacing_issues > 0 %}
+          <span class="text-xs text-amber-400 bg-amber-900/30 border border-amber-800/40 px-2 py-0.5 rounded">
+            {{ stats.pacing_issues }} chapter{{ 's' if stats.pacing_issues != 1 else '' }} with issues
+          </span>
+          {% endif %}
+        </div>
+        <span class="text-slate-600 text-xs">click to expand</span>
+      </summary>
+      <div class="px-5 pb-5 space-y-4">
+        <p class="text-xs text-slate-400 leading-relaxed">{{ pac.overall_pacing }}</p>
+
+        {% if pac.chapter_pacing %}
+        <div>
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Per-Chapter Pacing</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b border-slate-800">
+                  <th class="text-left text-slate-500 py-2 pr-4 font-medium">Chapter</th>
+                  <th class="text-left text-slate-500 py-2 pr-4 font-medium">Assessment</th>
+                  <th class="text-left text-slate-500 py-2 font-medium">Notes</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/50">
+                {% for cp in pac.chapter_pacing %}
+                <tr>
+                  <td class="py-2 pr-4 text-slate-400 whitespace-nowrap">Ch {{ cp.chapter_id }}</td>
+                  <td class="py-2 pr-4 whitespace-nowrap">
+                    {% if cp.assessment == 'well_paced' %}
+                      <span class="text-green-400">✅ Well Paced</span>
+                    {% elif cp.assessment == 'too_slow' %}
+                      <span class="text-amber-400">🐢 Too Slow</span>
+                    {% elif cp.assessment == 'too_fast' %}
+                      <span class="text-blue-400">⚡ Too Fast</span>
+                    {% else %}
+                      <span class="text-amber-400">🌊 Uneven</span>
+                    {% endif %}
+                  </td>
+                  <td class="py-2 text-slate-500 leading-relaxed">
+                    {{ cp.notes }}
+                    {% if cp.assessment != 'well_paced' %}
+                    <form class="inline-block ml-2" hx-post="/projects/{{ project.id }}/dev-editor/fix/preview"
+                          hx-target="#fix-panel-pacing-{{ cp.chapter_id }}"
+                          hx-swap="innerHTML"
+                          hx-indicator="#fix-spinner-pacing-{{ cp.chapter_id }}">
+                      <input type="hidden" name="issue_type" value="pacing">
+                      <input type="hidden" name="issue_index" value="0">
+                      <input type="hidden" name="chapter_id" value="{{ cp.chapter_id }}">
+                      <button type="submit"
+                              class="inline-flex items-center gap-1 text-xs bg-amber-500/10 hover:bg-amber-500/20
+                                     text-amber-400 border border-amber-500/30 hover:border-amber-400/50
+                                     py-0.5 px-2 rounded transition-colors">
+                        🔧 Fix
+                      </button>
+                    </form>
+                    <span id="fix-spinner-pacing-{{ cp.chapter_id }}"
+                          class="htmx-indicator text-xs text-amber-400 ml-1">Generating…</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% if cp.assessment != 'well_paced' %}
+                <tr>
+                  <td colspan="3" class="py-0">
+                    <div id="fix-panel-pacing-{{ cp.chapter_id }}"></div>
+                  </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-2 gap-4">
+          {% if pac.suggested_cuts %}
+          <div>
+            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Suggested Cuts</h3>
+            <ul class="space-y-1">
+              {% for cut in pac.suggested_cuts %}
+              <li class="text-xs text-slate-400 flex items-start gap-2">
+                <span class="text-red-400 mt-0.5 flex-shrink-0">✂</span> {{ cut }}
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if pac.suggested_expansions %}
+          <div>
+            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Suggested Expansions</h3>
+            <ul class="space-y-1">
+              {% for exp in pac.suggested_expansions %}
+              <li class="text-xs text-slate-400 flex items-start gap-2">
+                <span class="text-teal-400 mt-0.5 flex-shrink-0">+</span> {{ exp }}
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </details>
+
+    {# ─ Character Analysis ─ #}
+    {% set chars = report.character_analysis %}
+    {% if chars %}
+    <details class="bg-slate-900 border border-slate-800 rounded-xl">
+      <summary class="px-5 py-4 flex items-center justify-between cursor-pointer
+                      hover:bg-slate-800/40 rounded-xl transition-colors select-none">
+        <div class="flex items-center gap-3">
+          <span class="text-lg">👥</span>
+          <h2 class="text-sm font-semibold text-slate-200">Character Analysis</h2>
+          <span class="text-xs text-slate-600">{{ chars | length }} character{{ 's' if chars | length != 1 else '' }}</span>
+        </div>
+        <span class="text-slate-600 text-xs">click to expand</span>
+      </summary>
+      <div class="px-5 pb-5 space-y-3">
+        {% for char in chars %}
+        {% set char_idx = loop.index0 %}
+        <div class="p-4 bg-slate-800/40 border border-slate-700/40 rounded-lg">
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <h3 class="text-sm font-medium text-slate-200">{{ char.character_name }}</h3>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <span class="text-xs text-slate-600">Arc:</span>
+              {% if char.arc_complete %}
+                <span class="text-xs text-green-400">✅ Complete</span>
+              {% else %}
+                <span class="text-xs text-red-400">❌ Incomplete</span>
+              {% endif %}
+              <span class="text-xs text-slate-600 ml-1">Motivation:</span>
+              {% if char.motivation_clear %}
+                <span class="text-xs text-green-400">✅</span>
+              {% else %}
+                <span class="text-xs text-red-400">❌</span>
+              {% endif %}
+            </div>
+          </div>
+          <p class="text-xs text-slate-400 leading-relaxed mb-2">{{ char.arc_assessment }}</p>
+          {% if char.issues %}
+          <div class="space-y-2">
+            {% for issue in char.issues %}
+            <div class="p-2 bg-slate-900/40 border border-slate-700/30 rounded-lg">
+              <div class="flex items-start gap-2 text-xs text-slate-500">
+                <span class="text-amber-500 mt-0.5 flex-shrink-0">⚠</span>
+                <span class="flex-1">{{ issue }}</span>
+              </div>
+              {% if char.chapters_present %}
+              <div class="mt-1.5 ml-5">
+                <form class="inline-block" hx-post="/projects/{{ project.id }}/dev-editor/fix/preview"
+                      hx-target="#fix-panel-char-{{ char_idx }}-{{ loop.index0 }}"
+                      hx-swap="innerHTML"
+                      hx-indicator="#fix-spinner-char-{{ char_idx }}-{{ loop.index0 }}">
+                  <input type="hidden" name="issue_type" value="character_issue">
+                  <input type="hidden" name="issue_index" value="{{ char_idx }}">
+                  <input type="hidden" name="chapter_id" value="{{ loop.index0 }}">
+                  <button type="submit"
+                          class="inline-flex items-center gap-1 text-xs bg-amber-500/10 hover:bg-amber-500/20
+                                 text-amber-400 border border-amber-500/30 hover:border-amber-400/50
+                                 py-0.5 px-2 rounded transition-colors">
+                    🔧 Fix
+                  </button>
+                </form>
+                <span id="fix-spinner-char-{{ char_idx }}-{{ loop.index0 }}"
+                      class="htmx-indicator text-xs text-amber-400 ml-1">Generating…</span>
+              </div>
+              <div id="fix-panel-char-{{ char_idx }}-{{ loop.index0 }}"></div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if char.chapters_present %}
+          <div class="mt-2 text-xs text-slate-600">Chapters: {{ char.chapters_present | join(', ') }}</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+
+    {# ─ Structural Recommendations ─ #}
+    {% set struct_recs = report.structural_recommendations %}
+    {% if struct_recs %}
+    <details class="bg-slate-900 border border-slate-800 rounded-xl">
+      <summary class="px-5 py-4 flex items-center justify-between cursor-pointer
+                      hover:bg-slate-800/40 rounded-xl transition-colors select-none">
+        <div class="flex items-center gap-3">
+          <span class="text-lg">🏗</span>
+          <h2 class="text-sm font-semibold text-slate-200">Structural Recommendations</h2>
+          {% if stats.struct_recs_high > 0 %}
+          <span class="text-xs text-red-400 bg-red-900/30 border border-red-800/40 px-2 py-0.5 rounded">
+            {{ stats.struct_recs_high }} high priority
+          </span>
+          {% endif %}
+        </div>
+        <span class="text-slate-600 text-xs">click to expand</span>
+      </summary>
+      <div class="px-5 pb-5 space-y-2">
+        {# Sort: highs first #}
+        {% for rec in struct_recs | sort(attribute='priority') %}
+        <div class="p-3 bg-slate-800/60 border border-slate-700/50 rounded-lg">
+          <div class="flex items-center gap-2 mb-1">
+            {% if rec.priority == 'high' %}
+              <span class="text-xs text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded">High</span>
+            {% elif rec.priority == 'medium' %}
+              <span class="text-xs text-amber-400 bg-amber-900/30 px-1.5 py-0.5 rounded">Medium</span>
+            {% else %}
+              <span class="text-xs text-green-400 bg-green-900/30 px-1.5 py-0.5 rounded">Low</span>
+            {% endif %}
+            <span class="text-xs font-medium text-slate-300 uppercase tracking-wider">{{ rec.type }}</span>
+            {% if rec.chapters_affected %}
+              <span class="text-xs text-slate-600">Ch {{ rec.chapters_affected | join(', ') }}</span>
+            {% endif %}
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed mb-1">{{ rec.description }}</p>
+          {% if rec.rationale %}
+          <p class="text-xs text-slate-500 italic">{{ rec.rationale }}</p>
+          {% endif %}
+
+          {# Auto-Fix button #}
+          {% if rec.chapters_affected %}
+          <div class="mt-2">
+            <form hx-post="/projects/{{ project.id }}/dev-editor/fix/preview"
+                  hx-target="#fix-panel-structural_rec-{{ loop.index0 }}"
+                  hx-swap="innerHTML"
+                  hx-indicator="#fix-spinner-structural_rec-{{ loop.index0 }}">
+              <input type="hidden" name="issue_type" value="structural_rec">
+              <input type="hidden" name="issue_index" value="{{ loop.index0 }}">
+              <button type="submit"
+                      class="flex items-center gap-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20
+                             text-amber-400 border border-amber-500/30 hover:border-amber-400/50
+                             py-1 px-3 rounded-lg transition-colors">
+                <span>🔧</span>
+                <span>Auto-Fix</span>
+              </button>
+            </form>
+            <span id="fix-spinner-structural_rec-{{ loop.index0 }}"
+                  class="htmx-indicator text-xs text-amber-400 ml-2">
+              Generating fix…
+            </span>
+          </div>
+          <div id="fix-panel-structural_rec-{{ loop.index0 }}"></div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+
+    {# ─ Theme Analysis ─ #}
+    {% set themes = report.theme_analysis %}
+    {% if themes %}
+    <details class="bg-slate-900 border border-slate-800 rounded-xl">
+      <summary class="px-5 py-4 flex items-center justify-between cursor-pointer
+                      hover:bg-slate-800/40 rounded-xl transition-colors select-none">
+        <div class="flex items-center gap-3">
+          <span class="text-lg">💫</span>
+          <h2 class="text-sm font-semibold text-slate-200">Theme Analysis</h2>
+        </div>
+        <span class="text-slate-600 text-xs">click to expand</span>
+      </summary>
+      <div class="px-5 pb-5 space-y-3">
+        {% if themes.identified_themes %}
+        <div class="flex flex-wrap gap-2">
+          {% for theme in themes.identified_themes %}
+          <span class="text-xs text-amber-400 bg-amber-900/20 border border-amber-800/40 px-3 py-1 rounded-full">
+            {{ theme }}
+          </span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if themes.theme_consistency %}
+        <div class="p-3 bg-slate-800/40 rounded-lg">
+          <div class="text-xs font-medium text-slate-400 mb-1">Consistency</div>
+          <p class="text-xs text-slate-300 leading-relaxed">{{ themes.theme_consistency }}</p>
+        </div>
+        {% endif %}
+        {% if themes.thematic_gaps %}
+        <div class="p-3 bg-slate-800/40 rounded-lg">
+          <div class="text-xs font-medium text-slate-400 mb-1">Gaps</div>
+          <p class="text-xs text-slate-300 leading-relaxed">{{ themes.thematic_gaps }}</p>
+        </div>
+        {% endif %}
+      </div>
+    </details>
+    {% endif %}
+
+  </div>{# end left col #}
+
+  {# ── RIGHT: Quick-stats panel (1/3) ──────────────────────────────── #}
+  <div class="space-y-4">
+
+    {# Readiness card #}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Readiness</h2>
+      {% set r = report.overall_assessment.readiness_level %}
+      <div class="text-center py-3">
+        {% if r == 'publication_ready' %}
+          <div class="text-3xl mb-2">✅</div>
+          <div class="text-sm font-semibold text-green-400">Publication Ready</div>
+        {% elif r == 'nearly_ready' %}
+          <div class="text-3xl mb-2">🟢</div>
+          <div class="text-sm font-semibold text-teal-400">Nearly Ready</div>
+        {% elif r == 'needs_work' %}
+          <div class="text-3xl mb-2">🟡</div>
+          <div class="text-sm font-semibold text-amber-400">Needs Work</div>
+        {% else %}
+          <div class="text-3xl mb-2">🔴</div>
+          <div class="text-sm font-semibold text-red-400">Early Draft</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# At-a-glance stats #}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">At a Glance</h2>
+      <dl class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Chapters assessed</dt>
+          <dd class="text-slate-300">{{ stats.chapters_assessed }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Characters analysed</dt>
+          <dd class="text-slate-300">{{ stats.characters_analysed }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Plot holes</dt>
+          <dd class="{% if stats.plot_holes_high > 0 %}text-red-400{% else %}text-slate-300{% endif %}">
+            {{ stats.plot_holes_total }}
+            {% if stats.plot_holes_high > 0 %}
+              <span class="text-xs">({{ stats.plot_holes_high }} high)</span>
+            {% endif %}
+          </dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Pacing issues</dt>
+          <dd class="{% if stats.pacing_issues > 0 %}text-amber-400{% else %}text-green-400{% endif %}">
+            {{ stats.pacing_issues }}
+          </dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Chapter flags</dt>
+          <dd class="{% if stats.total_flags > 0 %}text-amber-400{% else %}text-green-400{% endif %}">
+            {{ stats.total_flags }}
+          </dd>
+        </div>
+        <div class="flex justify-between pt-2 border-t border-slate-800">
+          <dt class="text-slate-500">Structural recs</dt>
+          <dd class="{% if stats.struct_recs_high > 0 %}text-red-400{% elif stats.struct_recs_total > 0 %}text-amber-400{% else %}text-green-400{% endif %}">
+            {{ stats.struct_recs_total }}
+            {% if stats.struct_recs_high > 0 %}
+              <span class="text-xs">({{ stats.struct_recs_high }} high)</span>
+            {% endif %}
+          </dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Strengths</dt>
+          <dd class="text-green-400">{{ stats.strengths_count }}</dd>
+        </div>
+      </dl>
+    </div>
+
+    {# Re-run button #}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Actions</h2>
+      <a href="/projects/{{ project.id }}/dev-editor/run"
+         onclick="showRunOverlay()"
+         class="block w-full text-sm text-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400
+                border border-amber-500/30 hover:border-amber-400/50
+                px-4 py-2.5 rounded-lg transition-colors no-underline">
+        Re-run Analysis
+      </a>
+      <p class="text-xs text-slate-600 mt-2 leading-relaxed text-center">
+        Re-running replaces the current report.
+      </p>
+    </div>
+
+    {# Report info #}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">About This Report</h2>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        Developmental editing evaluates the manuscript at the highest level — plot, pacing,
+        character arcs, POV, and theme. It is <strong class="text-slate-500">advisory only</strong>:
+        no chapter files are modified.
+      </p>
+      <p class="text-xs text-slate-600 leading-relaxed mt-2">
+        Generated by Gemini 2.5 Pro via the Cassian Pipeline.
+      </p>
+    </div>
+
+  </div>{# end right col #}
+
+</div>{# end grid #}
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  CHAPTER ASSESSMENT CARDS (full width below the grid)                       #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{% if assessments %}
+<div class="mt-8">
+  <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+    <span>📖</span> Chapter-by-Chapter Assessment
+    <span class="text-slate-600 font-normal normal-case">{{ assessments | length }} chapters</span>
+  </h2>
+
+  <div class="grid grid-cols-3 gap-3">
+    {% for ca in assessments %}
+    {% set flags = ca.flags | length %}
+
+    {# Determine card border colour based on flag count and pacing #}
+    {% set has_issues = flags > 0 or ca.pacing in ('too_slow', 'too_fast', 'uneven') %}
+
+    <div class="bg-slate-900 border {% if has_issues %}border-amber-800/30{% else %}border-slate-800{% endif %}
+                rounded-xl p-4">
+
+      {# Header #}
+      <div class="flex items-start justify-between mb-3">
+        <div>
+          <div class="text-xs text-slate-500 mb-0.5">Chapter {{ ca.chapter_id }}</div>
+          <div class="text-sm font-medium text-slate-200 leading-snug">{{ ca.title or '—' }}</div>
+        </div>
+        {% if flags > 0 %}
+        <span class="text-xs text-amber-400 bg-amber-900/30 border border-amber-800/40
+                     px-2 py-0.5 rounded flex-shrink-0 ml-2">
+          🚩 {{ flags }}
+        </span>
+        {% endif %}
+      </div>
+
+      {# Purpose #}
+      {% if ca.purpose %}
+      <p class="text-xs text-slate-500 leading-relaxed mb-3 italic">{{ ca.purpose }}</p>
+      {% endif %}
+
+      {# Badge row #}
+      <div class="flex flex-wrap gap-1.5 mb-3">
+
+        {# Hook #}
+        {% if ca.hook_quality == 'strong' %}
+          <span class="text-xs bg-green-900/30 text-green-400 border border-green-800/40 px-2 py-0.5 rounded">Hook ✓</span>
+        {% elif ca.hook_quality == 'adequate' %}
+          <span class="text-xs bg-amber-900/30 text-amber-400 border border-amber-800/40 px-2 py-0.5 rounded">Hook ~</span>
+        {% elif ca.hook_quality in ('weak', 'missing') %}
+          <span class="text-xs bg-red-900/30 text-red-400 border border-red-800/40 px-2 py-0.5 rounded">Hook ✗</span>
+        {% endif %}
+
+        {# Ending #}
+        {% if ca.ending_quality == 'strong' %}
+          <span class="text-xs bg-green-900/30 text-green-400 border border-green-800/40 px-2 py-0.5 rounded">End ✓</span>
+        {% elif ca.ending_quality == 'adequate' %}
+          <span class="text-xs bg-amber-900/30 text-amber-400 border border-amber-800/40 px-2 py-0.5 rounded">End ~</span>
+        {% elif ca.ending_quality in ('weak', 'missing') %}
+          <span class="text-xs bg-red-900/30 text-red-400 border border-red-800/40 px-2 py-0.5 rounded">End ✗</span>
+        {% endif %}
+
+        {# Pacing #}
+        {% if ca.pacing == 'well_paced' %}
+          <span class="text-xs bg-green-900/30 text-green-400 border border-green-800/40 px-2 py-0.5 rounded">Pacing ✓</span>
+        {% elif ca.pacing == 'too_slow' %}
+          <span class="text-xs bg-amber-900/30 text-amber-400 border border-amber-800/40 px-2 py-0.5 rounded">Too Slow</span>
+        {% elif ca.pacing == 'too_fast' %}
+          <span class="text-xs bg-blue-900/30 text-blue-400 border border-blue-800/40 px-2 py-0.5 rounded">Too Fast</span>
+        {% elif ca.pacing == 'uneven' %}
+          <span class="text-xs bg-amber-900/30 text-amber-400 border border-amber-800/40 px-2 py-0.5 rounded">Uneven</span>
+        {% endif %}
+
+        {# POV #}
+        {% if ca.pov_consistency == 'consistent' %}
+          <span class="text-xs bg-slate-800 text-slate-400 border border-slate-700/50 px-2 py-0.5 rounded">POV ✓</span>
+        {% elif ca.pov_consistency == 'minor_issues' %}
+          <span class="text-xs bg-amber-900/30 text-amber-400 border border-amber-800/40 px-2 py-0.5 rounded">POV ~</span>
+        {% elif ca.pov_consistency == 'major_issues' %}
+          <span class="text-xs bg-red-900/30 text-red-400 border border-red-800/40 px-2 py-0.5 rounded">POV ✗</span>
+        {% endif %}
+
+        {# Show/Tell #}
+        {% if ca.show_vs_tell == 'mostly_showing' %}
+          <span class="text-xs bg-green-900/30 text-green-400 border border-green-800/40 px-2 py-0.5 rounded">Showing ✓</span>
+        {% elif ca.show_vs_tell == 'mostly_telling' %}
+          <span class="text-xs bg-red-900/30 text-red-400 border border-red-800/40 px-2 py-0.5 rounded">Telling ✗</span>
+        {% endif %}
+
+        {# Word count #}
+        {% if ca.word_count %}
+        <span class="text-xs bg-slate-800 text-slate-500 border border-slate-700/50 px-2 py-0.5 rounded">
+          {{ "{:,}".format(ca.word_count) }} w
+        </span>
+        {% endif %}
+
+      </div>
+
+      {# Notes (truncated) #}
+      {% if ca.notes %}
+      <p class="text-xs text-slate-600 leading-relaxed line-clamp-2">{{ ca.notes }}</p>
+      {% endif %}
+
+      {# Flags #}
+      {% if ca.flags %}
+      <div class="mt-2 space-y-2">
+        {% for flag in ca.flags %}
+        <div class="p-2 bg-slate-800/40 border border-slate-700/30 rounded-lg">
+          <div class="flex items-start gap-1.5 text-xs text-amber-500/80">
+            <span class="flex-shrink-0 mt-0.5">🚩</span>
+            <span class="leading-relaxed flex-1">{{ flag }}</span>
+          </div>
+          <div class="mt-1.5 ml-5">
+            <form hx-post="/projects/{{ project.id }}/dev-editor/fix/preview"
+                  hx-target="#fix-panel-flag-{{ ca.chapter_id }}-{{ loop.index0 }}"
+                  hx-swap="innerHTML"
+                  hx-indicator="#fix-spinner-flag-{{ ca.chapter_id }}-{{ loop.index0 }}">
+              <input type="hidden" name="issue_type" value="chapter_flag">
+              <input type="hidden" name="issue_index" value="{{ loop.index0 }}">
+              <input type="hidden" name="chapter_id" value="{{ ca.chapter_id }}">
+              <button type="submit"
+                      class="flex items-center gap-1 text-xs bg-amber-500/10 hover:bg-amber-500/20
+                             text-amber-400 border border-amber-500/30 hover:border-amber-400/50
+                             py-0.5 px-2 rounded transition-colors">
+                <span>🔧</span>
+                <span>Fix</span>
+              </button>
+            </form>
+            <span id="fix-spinner-flag-{{ ca.chapter_id }}-{{ loop.index0 }}"
+                  class="htmx-indicator text-xs text-amber-400 ml-2">
+              Generating fix…
+            </span>
+          </div>
+          <div id="fix-panel-flag-{{ ca.chapter_id }}-{{ loop.index0 }}"></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endif %}{# end has_report #}
+
+{# ── Run overlay ──────────────────────────────────────────────────────────── #}
+<div id="run-overlay" class="hidden">
+  <div class="spinner"></div>
+  <div class="text-center">
+    <div class="text-lg font-serif text-amber-400 mb-2">Running developmental analysis…</div>
+    <div class="text-sm text-slate-400">Reading your full manuscript and evaluating structure, pacing, and characters.</div>
+    <div class="text-xs text-slate-600 mt-2">This takes 1–3 minutes for a full book.</div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  function showRunOverlay() {
+    var overlay = document.getElementById('run-overlay');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+      overlay.classList.add('active');
+    }
+  }
+
+  function runAgent(url) {
+    showRunOverlay();
+    fetch(url, { method: 'POST', redirect: 'follow' })
+      .then(function(resp) {
+        window.location.href = resp.url || window.location.pathname;
+      })
+      .catch(function(err) {
+        alert('Agent request failed: ' + err);
+        var overlay = document.getElementById('run-overlay');
+        if (overlay) overlay.classList.add('hidden');
+      });
+  }
+</script>
+{% endblock %}

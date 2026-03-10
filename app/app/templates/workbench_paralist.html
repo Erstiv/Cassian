@@ -1,0 +1,14 @@
+{#
+  PARAGRAPH LIST FRAGMENT — returned for insert / delete operations.
+  Swapped into #paragraphs-list via hx-swap="innerHTML"
+
+  Context: project, chapter_key, paragraphs (list of {index, text})
+#}
+
+{% if not paragraphs %}
+<div class="py-12 text-center text-slate-500 text-sm">No paragraphs in this chapter.</div>
+{% else %}
+{% for para in paragraphs %}
+  {% include "workbench_para.html" %}
+{% endfor %}
+{% endif %}

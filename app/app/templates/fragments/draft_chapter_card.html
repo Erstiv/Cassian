@@ -1,0 +1,119 @@
+{# Fragment: Single chapter card for Draft Writer #}
+{# Variables: project, ch (enriched chapter dict with draft_status, draft_word_count, etc.) #}
+
+<div id="chapter-card-{{ ch.number }}" class="bg-slate-900 border border-slate-800 rounded-xl p-6
+     {% if ch.draft_status == 'approved' %}opacity-70{% endif %}">
+
+  {# Header: chapter number, title, status badge #}
+  <div class="flex items-center justify-between mb-3">
+    <h3 class="text-white font-semibold text-sm">
+      Ch. {{ ch.number }}: {{ ch.title }}
+    </h3>
+    {% if ch.draft_status == 'approved' %}
+      <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-900/50 text-emerald-400 font-medium">
+        Approved ✓
+      </span>
+    {% elif ch.draft_status == 'draft' %}
+      <span class="text-xs px-2.5 py-1 rounded-full bg-amber-900/50 text-amber-400 font-medium">
+        Generated
+      </span>
+    {% else %}
+      <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-500 font-medium">
+        Not started
+      </span>
+    {% endif %}
+  </div>
+
+  {# Summary from framework #}
+  <p class="text-slate-400 text-xs leading-relaxed mb-3">{{ ch.summary }}</p>
+
+  {# Meta row: characters, intensity #}
+  <div class="flex flex-wrap gap-2 mb-3">
+    {% if ch.characters %}
+      {% for char in ch.characters %}
+        <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400">{{ char }}</span>
+      {% endfor %}
+    {% endif %}
+    {% if ch.intensity %}
+      <span class="text-xs px-2 py-0.5 rounded
+        {% if ch.intensity == 'high' %}bg-red-900/40 text-red-400
+        {% elif ch.intensity == 'medium' %}bg-amber-900/40 text-amber-400
+        {% else %}bg-slate-800 text-slate-500{% endif %}">
+        {{ ch.intensity }} intensity
+      </span>
+    {% endif %}
+  </div>
+
+  {# Draft info (if generated) #}
+  {% if ch.draft_status in ['draft', 'approved'] %}
+  <div class="flex items-center gap-4 text-xs text-slate-500 mb-3 border-t border-slate-800 pt-3">
+    <span>{{ "{:,}".format(ch.draft_word_count) }} words</span>
+    {% if ch.draft_revision_count > 0 %}
+      <span>{{ ch.draft_revision_count }} revision{{ 's' if ch.draft_revision_count != 1 else '' }}</span>
+    {% endif %}
+    {% if ch.draft_generated_at %}
+      <span data-localtime="{{ ch.draft_generated_at }}" data-localtime-format="full">{{ ch.draft_generated_at }}</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# Action buttons #}
+  <div class="flex flex-wrap gap-2">
+    {% if ch.draft_status == 'not_started' %}
+      {# Generate button #}
+      <button hx-post="/projects/{{ project.id }}/draft-writer/generate/{{ ch.number }}"
+              hx-target="#chapter-card-{{ ch.number }}"
+              hx-swap="outerHTML"
+              hx-indicator="#spinner-{{ ch.number }}"
+              class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold px-4 py-2 rounded-lg text-sm transition-colors">
+        ✨ Generate Draft
+      </button>
+      <div id="spinner-{{ ch.number }}" class="htmx-indicator flex items-center">
+        <svg class="animate-spin h-5 w-5 text-amber-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        <span class="ml-2 text-xs text-slate-400">Generating (~30s)...</span>
+      </div>
+
+    {% elif ch.draft_status == 'draft' %}
+      {# View / Approve / Regenerate #}
+      <button hx-post="/projects/{{ project.id }}/draft-writer/preview/{{ ch.number }}"
+              hx-target="#draft-preview-panel"
+              hx-swap="innerHTML show:#draft-preview-panel:top"
+              class="bg-slate-700 hover:bg-slate-600 text-slate-100 font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+        👁 View Draft
+      </button>
+      <button hx-post="/projects/{{ project.id }}/draft-writer/approve/{{ ch.number }}"
+              hx-target="#chapter-card-{{ ch.number }}"
+              hx-swap="outerHTML"
+              class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-3 py-2 rounded-lg text-sm transition-colors">
+        ✓ Approve
+      </button>
+      <button hx-post="/projects/{{ project.id }}/draft-writer/generate/{{ ch.number }}"
+              hx-target="#chapter-card-{{ ch.number }}"
+              hx-swap="outerHTML"
+              hx-indicator="#spinner-{{ ch.number }}"
+              hx-confirm="Regenerate this chapter? The current draft will be overwritten."
+              class="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 font-medium px-3 py-2 rounded-lg text-sm transition-colors">
+        🔄 Regenerate
+      </button>
+      <div id="spinner-{{ ch.number }}" class="htmx-indicator flex items-center">
+        <svg class="animate-spin h-5 w-5 text-amber-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        <span class="ml-2 text-xs text-slate-400">Working...</span>
+      </div>
+
+    {% elif ch.draft_status == 'approved' %}
+      {# Already approved — minimal actions #}
+      <button hx-post="/projects/{{ project.id }}/draft-writer/preview/{{ ch.number }}"
+              hx-target="#draft-preview-panel"
+              hx-swap="innerHTML show:#draft-preview-panel:top"
+              class="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+        👁 View
+      </button>
+    {% endif %}
+  </div>
+</div>

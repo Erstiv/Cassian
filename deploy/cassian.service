@@ -1,0 +1,14 @@
+[Unit]
+Description=Project Cassian — Book Pipeline Web UI
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/cassian/app
+ExecStart=/bin/bash /var/www/cassian/deploy/start-prod.sh
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

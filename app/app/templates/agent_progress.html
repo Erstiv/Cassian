@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% set active_page = agent_name %}
+
+{% block title %}{{ agent_description }}… — {{ project.name }} — Cassian{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5">
+  <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+    <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+    <span>›</span>
+    <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+    <span>›</span>
+    <a href="{{ back_url }}" class="hover:text-slate-300 transition-colors">{{ agent_description }}</a>
+    <span>›</span>
+    <span class="text-slate-400">Running</span>
+  </div>
+  <h1 class="text-xl font-semibold text-slate-100">🔄 {{ agent_description }}…</h1>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto mt-16 px-8">
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8">
+
+    {# Spinner #}
+    <div class="flex justify-center mb-6">
+      <div class="w-10 h-10 border-3 border-slate-700 border-t-amber-400 rounded-full animate-spin"></div>
+    </div>
+
+    <div class="text-center mb-6">
+      <div class="text-lg font-serif text-amber-400 mb-1">Processing…</div>
+      <div class="text-sm text-slate-500">{{ agent_description }} is analyzing your project.</div>
+    </div>
+
+    {# Live progress area — HTMX polls every 2 seconds #}
+    <div id="progress-content"
+         hx-get="{{ poll_url }}"
+         hx-trigger="every 2s"
+         hx-swap="outerHTML">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-sm text-slate-400">{{ progress.message or 'Starting…' }}</span>
+        <span class="text-xs text-slate-600 ml-auto">{{ progress.done or 0 }} / {{ progress.total or '?' }}</span>
+      </div>
+      <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+        {% set pct = (progress.done / progress.total * 100)|round if progress.total else 0 %}
+        <div class="h-full bg-amber-400 rounded-full transition-all duration-500"
+             style="width: {{ pct }}%"></div>
+      </div>
+    </div>
+
+    <div class="text-center mt-6">
+      <span class="text-xs text-slate-600">This page updates automatically. Don't close it.</span>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

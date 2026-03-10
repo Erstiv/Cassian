@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+{% set active_page = "metadata" %}
+
+{% block title %}Metadata — {{ project.name }} — Cassian{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <h1 class="text-xl font-semibold text-slate-100">📋 Metadata</h1>
+    <p class="text-sm text-slate-500 mt-0.5">ISBN, categories, keywords, and publisher metadata for <span class="text-slate-300">{{ project.name }}</span></p>
+  </div>
+  {% if saved %}
+  <div class="flex items-center gap-2 bg-emerald-900/30 border border-emerald-700/50 rounded-lg px-4 py-2">
+    <span class="text-emerald-400 text-sm">✅ Saved successfully</span>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if error %}
+<div class="mb-6 bg-red-900/20 border border-red-700/50 rounded-lg px-4 py-3 text-red-400 text-sm">
+  ⚠️ {{ error }}
+</div>
+{% endif %}
+
+<form method="POST" action="/projects/{{ project.id }}/metadata/save" class="space-y-6">
+
+  {# ── BASIC INFO ─────────────────────────────────────────────────── #}
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">Basic Info</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="md:col-span-2">
+        <label class="block text-xs text-slate-400 mb-1.5">Title</label>
+        <input type="text" name="title" value="{{ metadata.title or '' }}"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors" />
+      </div>
+
+      <div class="md:col-span-2">
+        <label class="block text-xs text-slate-400 mb-1.5">Subtitle</label>
+        <input type="text" name="subtitle" value="{{ metadata.subtitle or '' }}"
+               placeholder="e.g. A Novel"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors" />
+      </div>
+
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Author</label>
+        <input type="text" name="author" value="{{ metadata.author or '' }}"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors" />
+      </div>
+
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Publisher</label>
+        <input type="text" name="publisher" value="{{ metadata.publisher or 'Self-published' }}"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors" />
+      </div>
+
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Publication Date</label>
+        <input type="date" name="publication_date"
+               value="{{ metadata.publication_date or '' }}"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors" />
+      </div>
+
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Edition</label>
+        <input type="text" name="edition" value="{{ metadata.edition or 'First Edition' }}"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors" />
+      </div>
+
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Language</label>
+        <select name="language"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                       focus:outline-none focus:border-amber-400 transition-colors">
+          {% for lang in ["English", "French", "Spanish", "German", "Italian", "Portuguese", "Russian", "Japanese", "Chinese", "Arabic"] %}
+          <option value="{{ lang }}" {% if metadata.language == lang %}selected{% endif %}>{{ lang }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  {# ── ISBN ───────────────────────────────────────────────────────── #}
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">ISBN</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">ISBN-13</label>
+        <input type="text" name="isbn_13" value="{{ metadata.isbn_13 or '' }}"
+               placeholder="978-0-000-00000-0"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors font-mono" />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">ISBN-10</label>
+        <input type="text" name="isbn_10" value="{{ metadata.isbn_10 or '' }}"
+               placeholder="0-000-00000-0"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors font-mono" />
+      </div>
+    </div>
+
+    <div class="mt-3 space-y-1 text-xs text-slate-500">
+      <p>ℹ️ Purchase ISBNs at <a href="https://www.myidentifiers.com" target="_blank" class="text-amber-400/70 hover:text-amber-400">myidentifiers.com</a> (Bowker — US standard)</p>
+      <p>ℹ️ Lulu and KDP can assign free ISBNs if you upload without one (but you won't own them)</p>
+    </div>
+  </div>
+
+  {# ── DESCRIPTION ────────────────────────────────────────────────── #}
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Description</h2>
+      <button type="button"
+              hx-post="/projects/{{ project.id }}/metadata/generate-description"
+              hx-target="#description-suggestions"
+              hx-indicator="#desc-spinner"
+              class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs
+                     px-3 py-1.5 rounded-lg transition-colors">
+        <span id="desc-spinner" class="htmx-indicator text-amber-400">⏳</span>
+        <span>✨ Generate Descriptions</span>
+      </button>
+    </div>
+
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">
+          Short description — 150 words
+          <span class="text-slate-600 ml-1">(for catalogs, retail listings)</span>
+        </label>
+        <textarea name="description_short" rows="4"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                         focus:outline-none focus:border-amber-400 transition-colors"
+                  >{{ metadata.description.short if metadata.description else '' }}</textarea>
+      </div>
+
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">
+          Long description — 500–1000 words
+          <span class="text-slate-600 ml-1">(marketing copy for readers)</span>
+        </label>
+        <textarea name="description_long" rows="10"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                         focus:outline-none focus:border-amber-400 transition-colors"
+                  >{{ metadata.description.long if metadata.description else '' }}</textarea>
+      </div>
+    </div>
+
+    {# HTMX injection target for AI-generated descriptions #}
+    <div id="description-suggestions" class="mt-4"></div>
+  </div>
+
+  {# ── CATEGORIES & KEYWORDS ──────────────────────────────────────── #}
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">Categories &amp; Keywords</h2>
+
+    {# BISAC categories #}
+    <div class="mb-5">
+      <label class="block text-xs text-slate-400 mb-1.5">BISAC Category</label>
+      <select name="bisac_primary"
+              class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                     focus:outline-none focus:border-amber-400 transition-colors">
+        <option value="">— Select a category —</option>
+        {% for code, label in bisac_categories %}
+        {% set current_bisac = metadata.categories.bisac if metadata.categories else [] %}
+        {% set match = code + " — " + label %}
+        <option value="{{ match }}"
+          {% if current_bisac and (match in current_bisac or code in current_bisac) %}selected{% endif %}>
+          {{ code }} — {{ label }}
+        </option>
+        {% endfor %}
+      </select>
+      <p class="text-xs text-slate-600 mt-1">
+        BISAC codes are the standard classification used by bookstores and libraries.
+        <a href="https://www.bisg.org/bisac-subject-codes" target="_blank" class="text-amber-400/60 hover:text-amber-400">Full list ↗</a>
+      </p>
+
+      {# Hidden field for full BISAC list (populated by JS for multi-select if needed) #}
+      <input type="hidden" name="bisac_categories" id="bisac-categories-hidden"
+             value="{{ (metadata.categories.bisac | join(',')) if metadata.categories and metadata.categories.bisac else '' }}" />
+    </div>
+
+    {# Keywords #}
+    <div class="mb-5">
+      <div class="flex items-center justify-between mb-1.5">
+        <label class="block text-xs text-slate-400">Keywords</label>
+        <button type="button"
+                hx-post="/projects/{{ project.id }}/metadata/generate-keywords"
+                hx-target="#keywords-suggestions"
+                hx-indicator="#kw-spinner"
+                class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs
+                       px-3 py-1 rounded-lg transition-colors">
+          <span id="kw-spinner" class="htmx-indicator text-amber-400">⏳</span>
+          <span>✨ Generate Keywords</span>
+        </button>
+      </div>
+      <input type="text" name="keywords"
+             value="{{ metadata.keywords | join(', ') if metadata.keywords else '' }}"
+             placeholder="science fiction, Russia, Cold War, mythology, ..."
+             class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                    focus:outline-none focus:border-amber-400 transition-colors" />
+      <p class="text-xs text-slate-600 mt-1">Comma-separated. Used for search discovery on retail platforms.</p>
+      <div id="keywords-suggestions" class="mt-3"></div>
+    </div>
+
+    {# Age range + Content warnings #}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Age Range</label>
+        <select name="age_range"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                       focus:outline-none focus:border-amber-400 transition-colors">
+          {% for age in ["Adult", "Young Adult (13–17)", "Middle Grade (8–12)", "Children (4–8)", "Children (0–4)", "All Ages"] %}
+          <option value="{{ age }}" {% if metadata.age_range == age %}selected{% endif %}>{{ age }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Content Warnings</label>
+        <input type="text" name="content_warnings"
+               value="{{ metadata.content_warnings | join(', ') if metadata.content_warnings else '' }}"
+               placeholder="e.g. violence, language (optional)"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors" />
+      </div>
+    </div>
+  </div>
+
+  {# ── SERIES & RIGHTS ────────────────────────────────────────────── #}
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">Series &amp; Rights</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="md:col-span-2">
+        <label class="block text-xs text-slate-400 mb-1.5">Series Name</label>
+        <input type="text" name="series_name"
+               value="{{ metadata.series.name if metadata.series else '' }}"
+               placeholder="Leave blank if standalone"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors" />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Number in Series</label>
+        <input type="number" name="series_number" min="1"
+               value="{{ metadata.series.number if metadata.series and metadata.series.number else '' }}"
+               placeholder="e.g. 1"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors" />
+      </div>
+
+      <div class="md:col-span-2">
+        <label class="block text-xs text-slate-400 mb-1.5">Rights</label>
+        <input type="text" name="rights"
+               value="{{ metadata.rights or 'All rights reserved' }}"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                      focus:outline-none focus:border-amber-400 transition-colors" />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Territory</label>
+        <select name="territory"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                       focus:outline-none focus:border-amber-400 transition-colors">
+          {% for t in ["Worldwide", "North America", "United States", "United Kingdom", "Commonwealth", "European Union"] %}
+          <option value="{{ t }}" {% if metadata.territory == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  {# ── PRICING ─────────────────────────────────────────────────────── #}
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">Pricing</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Currency</label>
+        <select name="currency"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100
+                       focus:outline-none focus:border-amber-400 transition-colors">
+          {% for cur in ["USD", "EUR", "GBP", "CAD", "AUD"] %}
+          {% set pricing = metadata.pricing if metadata.pricing else {} %}
+          <option value="{{ cur }}" {% if pricing.get('currency', 'USD') == cur %}selected{% endif %}>{{ cur }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Print List Price</label>
+        <div class="relative">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">$</span>
+          <input type="number" name="print_list" step="0.01" min="0"
+                 value="{{ metadata.pricing.print_list if metadata.pricing and metadata.pricing.print_list else '' }}"
+                 placeholder="0.00"
+                 class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-7 pr-3 py-2 text-sm text-slate-100
+                        focus:outline-none focus:border-amber-400 transition-colors" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Ebook List Price</label>
+        <div class="relative">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">$</span>
+          <input type="number" name="ebook_list" step="0.01" min="0"
+                 value="{{ metadata.pricing.ebook_list if metadata.pricing and metadata.pricing.ebook_list else '' }}"
+                 placeholder="0.00"
+                 class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-7 pr-3 py-2 text-sm text-slate-100
+                        focus:outline-none focus:border-amber-400 transition-colors" />
+        </div>
+      </div>
+    </div>
+
+    <p class="text-xs text-slate-600 mt-3">
+      Pricing is informational. Final prices are set on each publisher's platform at upload time.
+    </p>
+  </div>
+
+  {# ── SAVE ────────────────────────────────────────────────────────── #}
+  <div class="flex items-center justify-between pt-2">
+    {% if metadata.last_updated %}
+    <p class="text-xs text-slate-600">
+      Last saved: <span data-localtime="{{ metadata.last_updated }}" data-localtime-format="full">{{ metadata.last_updated }}</span>
+    </p>
+    {% else %}
+    <p class="text-xs text-slate-600">Not yet saved</p>
+    {% endif %}
+
+    <button type="submit"
+            class="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold
+                   text-sm px-6 py-2.5 rounded-lg transition-colors">
+      💾 Save Metadata
+    </button>
+  </div>
+
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  /*
+    BISAC select → hidden field sync
+    When the user picks a BISAC category from the dropdown, update the hidden
+    field so it's included in the form POST. For now we support one primary
+    category; can be extended to multi-select later.
+  */
+  (function () {
+    var sel    = document.querySelector('select[name="bisac_primary"]');
+    var hidden = document.getElementById('bisac-categories-hidden');
+    if (!sel || !hidden) return;
+
+    sel.addEventListener('change', function () {
+      hidden.value = sel.value ? JSON.stringify([sel.value]) : '[]';
+    });
+
+    // On load: if the hidden field already has a value, select the matching option
+    var existing = hidden.value.trim();
+    if (existing && existing !== '[]') {
+      try {
+        var arr = JSON.parse(existing);
+        if (arr.length > 0) {
+          var want = arr[0];
+          for (var i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].value === want || sel.options[i].value.startsWith(want.split(' ')[0])) {
+              sel.selectedIndex = i;
+              break;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Also: on form submit, make sure BISAC hidden is correctly serialized
+    var form = sel.closest('form');
+    if (form) {
+      form.addEventListener('submit', function () {
+        if (sel.value && (!hidden.value || hidden.value === '[]')) {
+          hidden.value = JSON.stringify([sel.value]);
+        }
+      });
+    }
+  })();
+</script>
+{% endblock %}

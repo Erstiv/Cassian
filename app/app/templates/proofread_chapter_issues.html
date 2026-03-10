@@ -1,0 +1,80 @@
+{#
+  HTMX fragment — proofread_chapter_issues.html
+  Rendered by GET /projects/{project_id}/proofread/chapter/{chapter_key}
+  Swapped into the chapter body via HTMX if used for lazy loading.
+  Also used by the dismiss route to re-render individual issues.
+#}
+
+{% set cat_styles = {
+  "typo":          "text-red-400    bg-red-900/20    border-red-700/30",
+  "repeated_word": "text-orange-400 bg-orange-900/20 border-orange-700/30",
+  "homophone":     "text-purple-400 bg-purple-900/20 border-purple-700/30",
+  "punctuation":   "text-amber-400  bg-amber-900/20  border-amber-700/30",
+  "capitalization":"text-blue-400   bg-blue-900/20   border-blue-700/30",
+  "formatting":    "text-slate-400  bg-slate-800/40  border-slate-700/30",
+  "continuity":    "text-cyan-400   bg-cyan-900/20   border-cyan-700/30",
+} %}
+
+{% set ch_issues = chapter_data.get('issues', []) %}
+
+{% if not ch_issues %}
+  <p class="px-5 py-4 text-sm text-slate-500 text-center">No issues found in this chapter.</p>
+{% else %}
+<div class="divide-y divide-slate-800/40" id="issue-list-{{ chapter_key }}">
+  {% for issue in ch_issues %}
+  {% set loop_idx = loop.index0 %}
+  {% set cat      = issue.get('category', '') %}
+  {% set colors   = cat_styles.get(cat, 'text-slate-400 bg-slate-800 border-slate-700') %}
+  {% set is_dismissed = issue.get('dismissed', false) %}
+
+  <div id="issue-{{ chapter_key }}-{{ loop_idx }}"
+       class="flex items-start gap-3 px-5 py-3.5 border rounded-none
+              {{ colors }}
+              {{ 'opacity-40 line-through' if is_dismissed else '' }}
+              transition-opacity">
+
+    <div class="flex-shrink-0 text-xs font-semibold uppercase tracking-wide mt-0.5 w-36">
+      {{ cat.replace('_', ' ') }}
+      <span class="font-normal opacity-70 ml-1">¶{{ issue.get('paragraph_index', '?') }}</span>
+    </div>
+
+    <div class="flex-1 min-w-0">
+      <div class="text-xs font-mono leading-relaxed break-words issue-context">
+        {{ issue.get('context', '') }}
+      </div>
+      <div class="text-xs text-slate-500 mt-1">
+        <span class="text-slate-600">→</span>
+        {{ issue.get('explanation', '') }}
+      </div>
+      {% if issue.get('suggestion') %}
+      <div class="text-xs text-slate-400 mt-0.5">
+        <span class="text-slate-600">Fix:</span>
+        <span class="font-mono">{{ issue.get('suggestion', '') }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if not is_dismissed %}
+    <button
+      hx-post="/projects/{{ project.id }}/proofread/dismiss/{{ chapter_key }}/{{ loop_idx }}"
+      hx-target="#issue-{{ chapter_key }}-{{ loop_idx }}"
+      hx-swap="outerHTML"
+      class="flex-shrink-0 text-xs text-slate-600 hover:text-slate-400
+             border border-slate-700 hover:border-slate-500
+             rounded-lg px-2 py-0.5 transition-colors">
+      Dismiss
+    </button>
+    {% else %}
+    <span class="flex-shrink-0 text-xs text-slate-600">Dismissed</span>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+</div>
+
+<script>
+  document.querySelectorAll('.issue-context').forEach(function (el) {
+    el.innerHTML = el.innerHTML.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-400">$1</strong>');
+  });
+</script>
+{% endif %}

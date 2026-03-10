@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% set active_page = "export" %}
+
+{% block title %}Export — {{ project.name }} — Cassian{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5">
+  <h1 class="text-xl font-semibold text-slate-100">📦 Export</h1>
+  <p class="text-sm text-slate-500 mt-0.5">Download your print-ready files and upload to your publisher</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── PUBLISH READINESS CHECKLIST ──────────────────────────────────── #}
+<div class="mb-6 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+  <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Publish Readiness</h2>
+    <span class="text-sm {% if done_count == total_count %}text-emerald-400{% elif done_count >= total_count - 1 %}text-amber-400{% else %}text-slate-400{% endif %}">
+      {{ done_count }} of {{ total_count }} steps complete
+    </span>
+  </div>
+
+  <div class="divide-y divide-slate-800/60">
+    {% for item in checklist %}
+    <div class="px-6 py-3 flex items-center gap-3">
+      {# Status icon #}
+      {% if item.done %}
+        <span class="text-emerald-400 text-base w-5 flex-shrink-0">✅</span>
+      {% elif item.get('warn') %}
+        <span class="text-amber-400 text-base w-5 flex-shrink-0">⚠️</span>
+      {% else %}
+        <span class="text-slate-600 text-base w-5 flex-shrink-0">○</span>
+      {% endif %}
+
+      {# Label + detail #}
+      <div class="flex-1 min-w-0">
+        <a href="{{ item.link }}"
+           class="text-sm {% if item.done %}text-slate-200{% elif item.get('warn') %}text-amber-300{% else %}text-slate-500{% endif %} hover:text-amber-400 transition-colors">
+          {{ item.label }}
+        </a>
+        {% if item.detail %}
+        <span class="text-xs text-slate-600 ml-2">{{ item.detail }}</span>
+        {% endif %}
+      </div>
+
+      {# Link to fix #}
+      {% if not item.done %}
+      <a href="{{ item.link }}"
+         class="text-xs text-amber-400/60 hover:text-amber-400 transition-colors flex-shrink-0">
+        Go →
+      </a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{# ── ERROR / SUCCESS BANNERS ──────────────────────────────────────── #}
+{% if package_error %}
+<div class="mb-6 bg-red-900/20 border border-red-700/50 rounded-lg px-4 py-3 text-red-400 text-sm">
+  ⚠️ {{ package_error }}
+</div>
+{% endif %}
+
+{% if package_created %}
+<div class="mb-6 bg-emerald-900/20 border border-emerald-700/50 rounded-lg px-4 py-3 text-emerald-400 text-sm">
+  ✅ Package created successfully — download it below.
+</div>
+{% endif %}
+
+{# ── AVAILABLE DOWNLOADS ──────────────────────────────────────────── #}
+<div class="mb-6 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+  <div class="px-6 py-4 border-b border-slate-800">
+    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Available Downloads</h2>
+  </div>
+
+  <div class="divide-y divide-slate-800/60">
+
+    {# Interior PDF #}
+    <div class="px-6 py-4 flex items-center gap-4">
+      <div class="text-2xl w-10 flex-shrink-0 text-center">📄</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-medium {% if interior_pdf %}text-slate-100{% else %}text-slate-500{% endif %}">
+          Interior PDF
+        </div>
+        {% if interior_pdf %}
+        <div class="text-xs text-slate-500 mt-0.5">
+          {{ interior_pdf.size }}
+          · Built <span data-localtime="{{ interior_pdf.modified_iso }}" data-localtime-format="date">{{ interior_pdf.modified }}</span>
+        </div>
+        {% else %}
+        <div class="text-xs text-slate-600 mt-0.5">
+          Not built yet —
+          <a href="/projects/{{ project.id }}/layout" class="text-amber-400/60 hover:text-amber-400">run Layout</a>
+        </div>
+        {% endif %}
+      </div>
+      <div class="flex-shrink-0">
+        {% if interior_pdf %}
+        <a href="/projects/{{ project.id }}/export/download/interior_pdf"
+           class="inline-flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200
+                  text-xs px-3 py-1.5 rounded-lg transition-colors">
+          ⬇️ Download
+        </a>
+        {% else %}
+        <span class="text-xs text-slate-700 px-3 py-1.5">Unavailable</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Cover Wraparound #}
+    <div class="px-6 py-4 flex items-center gap-4">
+      <div class="text-2xl w-10 flex-shrink-0 text-center">📕</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-medium {% if cover_png or cover_tif %}text-slate-100{% else %}text-slate-500{% endif %}">
+          Cover Wraparound
+        </div>
+        {% if cover_png %}
+        <div class="text-xs text-slate-500 mt-0.5">
+          PNG · {{ cover_png.size }}
+          · <span data-localtime="{{ cover_png.modified_iso }}" data-localtime-format="date">{{ cover_png.modified }}</span>
+        </div>
+        {% elif cover_tif %}
+        <div class="text-xs text-slate-500 mt-0.5">
+          TIFF · {{ cover_tif.size }}
+          · <span data-localtime="{{ cover_tif.modified_iso }}" data-localtime-format="date">{{ cover_tif.modified }}</span>
+        </div>
+        {% else %}
+        <div class="text-xs text-slate-600 mt-0.5">
+          Not generated yet —
+          <a href="/projects/{{ project.id }}/cover" class="text-amber-400/60 hover:text-amber-400">go to Cover</a>
+        </div>
+        {% endif %}
+      </div>
+      <div class="flex-shrink-0 flex items-center gap-2">
+        {% if cover_png %}
+        <a href="/projects/{{ project.id }}/export/download/cover_wraparound_png"
+           class="inline-flex items-center gap-1 bg-slate-700 hover:bg-slate-600 text-slate-200
+                  text-xs px-3 py-1.5 rounded-lg transition-colors">
+          ⬇️ PNG
+        </a>
+        {% endif %}
+        {% if cover_tif %}
+        <a href="/projects/{{ project.id }}/export/download/cover_wraparound_tif"
+           class="inline-flex items-center gap-1 bg-slate-700 hover:bg-slate-600 text-slate-200
+                  text-xs px-3 py-1.5 rounded-lg transition-colors">
+          ⬇️ TIFF
+        </a>
+        {% endif %}
+        {% if not cover_png and not cover_tif %}
+        <span class="text-xs text-slate-700 px-3 py-1.5">Unavailable</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Metadata JSON #}
+    <div class="px-6 py-4 flex items-center gap-4">
+      <div class="text-2xl w-10 flex-shrink-0 text-center">📋</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-medium {% if metadata_json %}text-slate-100{% else %}text-slate-500{% endif %}">
+          Metadata
+        </div>
+        {% if metadata_json %}
+        <div class="text-xs text-slate-500 mt-0.5">
+          JSON · {{ metadata_json.size }}
+          · Last updated <span data-localtime="{{ metadata_json.modified_iso }}" data-localtime-format="date">{{ metadata_json.modified }}</span>
+        </div>
+        {% else %}
+        <div class="text-xs text-slate-600 mt-0.5">
+          Not saved yet —
+          <a href="/projects/{{ project.id }}/metadata" class="text-amber-400/60 hover:text-amber-400">go to Metadata</a>
+        </div>
+        {% endif %}
+      </div>
+      <div class="flex-shrink-0">
+        {% if metadata_json %}
+        <a href="/projects/{{ project.id }}/export/download/metadata_json"
+           class="inline-flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200
+                  text-xs px-3 py-1.5 rounded-lg transition-colors">
+          ⬇️ Download JSON
+        </a>
+        {% else %}
+        <span class="text-xs text-slate-700 px-3 py-1.5">Unavailable</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Full Publish Package #}
+    <div class="px-6 py-5 bg-slate-800/30">
+      <div class="flex items-center gap-4">
+        <div class="text-2xl w-10 flex-shrink-0 text-center">📦</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-slate-100">Full Publish Package</div>
+          {% if package_info %}
+          <div class="text-xs text-slate-500 mt-0.5">
+            ZIP · {{ package_info.size }}
+            · Created <span data-localtime="{{ package_info.modified_iso }}" data-localtime-format="date">{{ package_info.modified }}</span>
+          </div>
+          {% else %}
+          <div class="text-xs text-slate-500 mt-0.5">
+            ZIP containing all files above (interior PDF + cover files + metadata)
+          </div>
+          {% endif %}
+        </div>
+        <div class="flex-shrink-0 flex items-center gap-2">
+          {% if package_info %}
+          <a href="/projects/{{ project.id }}/export/download/full_package"
+             class="inline-flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200
+                    text-xs px-3 py-1.5 rounded-lg transition-colors">
+            ⬇️ Download ZIP
+          </a>
+          {% endif %}
+          <form method="POST" action="/projects/{{ project.id }}/export/package">
+            <button type="submit"
+                    class="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-900
+                           font-semibold text-xs px-4 py-1.5 rounded-lg transition-colors">
+              📦 {% if package_info %}Rebuild{% else %}Create{% endif %} Package
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{# ── PUBLISHER QUICK LINKS ─────────────────────────────────────────── #}
+<div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+  <div class="px-6 py-4 border-b border-slate-800">
+    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Upload to Publisher</h2>
+  </div>
+
+  <div class="px-6 py-4 space-y-3">
+    <p class="text-sm text-slate-400 mb-4">
+      Once your files are ready, upload them directly to your chosen platform.
+      Your files are currently formatted for: <span class="text-amber-400">{{ publisher_label }}</span>
+    </p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+      <a href="https://www.lulu.com/create" target="_blank" rel="noopener"
+         class="flex items-center gap-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600
+                rounded-lg px-4 py-3 transition-colors group">
+        <span class="text-xl">📚</span>
+        <div>
+          <div class="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">Lulu</div>
+          <div class="text-xs text-slate-500">lulu.com/create ↗</div>
+        </div>
+      </a>
+
+      <a href="https://kdp.amazon.com" target="_blank" rel="noopener"
+         class="flex items-center gap-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600
+                rounded-lg px-4 py-3 transition-colors group">
+        <span class="text-xl">📚</span>
+        <div>
+          <div class="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">KDP (Amazon)</div>
+          <div class="text-xs text-slate-500">kdp.amazon.com ↗</div>
+        </div>
+      </a>
+
+      <a href="https://myaccount.ingramspark.com" target="_blank" rel="noopener"
+         class="flex items-center gap-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600
+                rounded-lg px-4 py-3 transition-colors group">
+        <span class="text-xl">📚</span>
+        <div>
+          <div class="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">IngramSpark</div>
+          <div class="text-xs text-slate-500">myaccount.ingramspark.com ↗</div>
+        </div>
+      </a>
+
+      <a href="https://www.draft2digital.com" target="_blank" rel="noopener"
+         class="flex items-center gap-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600
+                rounded-lg px-4 py-3 transition-colors group">
+        <span class="text-xl">📚</span>
+        <div>
+          <div class="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">Draft2Digital</div>
+          <div class="text-xs text-slate-500">draft2digital.com ↗</div>
+        </div>
+      </a>
+
+    </div>
+
+    <p class="text-xs text-slate-600 mt-3">
+      Each platform has slightly different upload requirements.
+      Cassian formats your interior and cover files to match <span class="text-slate-400">{{ publisher_label }}</span> specifications.
+      If switching publishers, re-run Layout and Cover with the new publisher profile first.
+    </p>
+  </div>
+</div>
+
+{% endblock %}

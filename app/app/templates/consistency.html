@@ -1,0 +1,567 @@
+{% extends "base.html" %}
+{% set active_page = "consistency" %}
+
+{% block title %}Consistency Editor — {{ project.name }} — Cassian{% endblock %}
+
+{% block head %}
+<style>
+  #run-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(2, 6, 23, 0.85);
+    backdrop-filter: blur(4px);
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1.5rem;
+  }
+  #run-overlay.active {
+    display: flex;
+  }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid #334155;
+    border-top-color: #fbbf24;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Collapsible section expand icon rotation */
+  .section-expand-icon { transition: transform 200ms ease; }
+  .section-card.open .section-expand-icon { transform: rotate(90deg); }
+
+  /* Smooth transitions for HTMX fix-panel swaps */
+  [id^="fix-panel-"] > div {
+    animation: fadeSlideIn 300ms ease;
+  }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+{% endblock %}
+
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+      <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+      <span>›</span>
+      <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+      <span>›</span>
+      <span class="text-slate-400">Consistency Editor</span>
+    </div>
+    <h1 class="font-serif text-2xl text-slate-100">Consistency Editor</h1>
+    <p class="text-sm text-slate-500 mt-0.5">
+      Cross-chapter audit — character details, timelines, world-building, tone, and world rule violations
+    </p>
+  </div>
+
+  <div class="flex items-center gap-3">
+    {# Status badge #}
+    {% if status == "complete" %}
+      <span class="text-xs bg-green-900/40 text-green-400 border border-green-700/40 px-3 py-1.5 rounded-lg">
+        ✅ Complete
+      </span>
+    {% elif status == "stale" %}
+      <span class="text-xs bg-amber-900/40 text-amber-400 border border-amber-700/40 px-3 py-1.5 rounded-lg">
+        ⚠ Stale — chapters changed since last run
+      </span>
+    {% else %}
+      <span class="text-xs bg-slate-800 text-slate-500 border border-slate-700 px-3 py-1.5 rounded-lg">
+        Not run
+      </span>
+    {% endif %}
+
+    {# Run button — plain link #}
+    <a href="/projects/{{ project.id }}/consistency/run"
+       onclick="showRunOverlay()"
+       class="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950
+              font-semibold py-2 px-4 rounded-xl transition-colors text-sm no-underline">
+      🔗 {% if status == 'not_run' %}Run Consistency Check{% else %}Re-run Check{% endif %}
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── ERROR BANNER ─────────────────────────────────────────────────────────── #}
+{% if error %}
+<div class="mb-6 bg-red-900/30 border border-red-700/50 rounded-xl p-4">
+  <div class="flex items-start gap-3">
+    <span class="text-red-400 text-lg flex-shrink-0">✗</span>
+    <div>
+      <div class="text-sm font-semibold text-red-300 mb-1">Consistency check failed</div>
+      <pre class="text-xs text-red-400/80 whitespace-pre-wrap font-mono leading-relaxed">{{ error }}</pre>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  EMPTY STATE                                                                 #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{% if status == "not_run" %}
+
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center max-w-2xl mx-auto">
+  <div class="text-5xl mb-5">🔗</div>
+  <h2 class="font-serif text-xl text-slate-300 mb-2">No consistency report yet</h2>
+  <p class="text-slate-500 text-sm mb-6">
+    The Consistency Editor reads your entire manuscript in one pass and flags anything
+    inconsistent across chapters — character names, timelines, place details, tone drift,
+    and violations of your world rules.
+  </p>
+
+  <div class="text-left bg-slate-800/40 border border-slate-700/50 rounded-xl p-5 mb-8 text-sm">
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">What it checks</div>
+    <ul class="space-y-2 text-slate-400">
+      <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">🧑</span> Character names, traits, and appearances stay consistent</li>
+      <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">🌍</span> World-building details don't contradict each other</li>
+      <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">⏳</span> Timeline events are in order and don't overlap impossibly</li>
+      <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">🎭</span> Tone and voice don't shift unexpectedly between chapters</li>
+      <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">📖</span> World rules (if defined) are respected throughout</li>
+    </ul>
+  </div>
+
+  <a href="/projects/{{ project.id }}/consistency/run"
+     onclick="showRunOverlay()"
+     class="inline-block bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold
+            py-3 px-8 rounded-xl transition-colors text-sm no-underline">
+    🔗 Run Consistency Check
+  </a>
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  REPORT VIEW (complete or stale)                                             #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{% else %}
+
+{# ── STALE WARNING ── #}
+{% if status == "stale" %}
+<div class="mb-6 bg-amber-900/20 border border-amber-700/40 rounded-xl p-4 flex items-start gap-3">
+  <span class="text-amber-400 text-lg flex-shrink-0">⚠</span>
+  <div class="text-sm">
+    <span class="font-semibold text-amber-300">Report is stale.</span>
+    <span class="text-amber-400/80 ml-1">
+      One or more chapters have been modified since the last consistency check.
+      Re-run to get an up-to-date report.
+    </span>
+  </div>
+</div>
+{% endif %}
+
+{% if report %}
+
+{# ── SUMMARY BAR ────────────────────────────────────────────────────────────── #}
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+    <div>
+      <span class="text-2xl font-bold text-slate-100">{{ stats.total_issues }}</span>
+      <span class="text-slate-400 text-sm ml-2">
+        issue{{ 's' if stats.total_issues != 1 else '' }} found
+      </span>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-slate-500">Generated {{ report.get('generated_at', '')[:16].replace('T', ' ') }}</span>
+    </div>
+  </div>
+
+  {# Severity breakdown #}
+  <div class="flex flex-wrap gap-2 mb-3">
+    {% if stats.high > 0 %}
+    <span class="flex items-center gap-1.5 text-xs border rounded-lg px-2.5 py-1
+                 bg-red-900/30 text-red-400 border-red-700/40">
+      <span class="font-semibold">{{ stats.high }}</span>
+      <span class="opacity-80">High</span>
+    </span>
+    {% endif %}
+    {% if stats.medium > 0 %}
+    <span class="flex items-center gap-1.5 text-xs border rounded-lg px-2.5 py-1
+                 bg-amber-900/30 text-amber-400 border-amber-700/40">
+      <span class="font-semibold">{{ stats.medium }}</span>
+      <span class="opacity-80">Medium</span>
+    </span>
+    {% endif %}
+    {% if stats.low > 0 %}
+    <span class="flex items-center gap-1.5 text-xs border rounded-lg px-2.5 py-1
+                 bg-slate-800 text-slate-400 border-slate-700/40">
+      <span class="font-semibold">{{ stats.low }}</span>
+      <span class="opacity-80">Low</span>
+    </span>
+    {% endif %}
+    {% if stats.total_issues == 0 %}
+    <span class="flex items-center gap-1.5 text-xs border rounded-lg px-2.5 py-1
+                 bg-green-900/30 text-green-400 border-green-700/40">
+      <span class="font-semibold">✓</span>
+      <span class="opacity-80">No issues found</span>
+    </span>
+    {% endif %}
+  </div>
+
+  {# Batch Fix All button #}
+  {% if stats.total_issues > 0 %}
+  <div class="flex items-center gap-3 mb-3">
+    <button hx-post="/projects/{{ project.id }}/consistency/fix-all"
+            hx-target="#batch-fix-results"
+            hx-swap="innerHTML"
+            hx-indicator="#batch-fix-spinner"
+            hx-confirm="Auto-fix all {{ stats.total_issues }} issues? This may take several minutes for large books."
+            class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950
+                   font-semibold px-4 py-2 rounded-lg text-sm transition-colors">
+      🔧 Auto-Fix All Issues ({{ stats.total_issues }})
+    </button>
+    <span id="batch-fix-spinner" class="htmx-indicator inline-flex items-center gap-2">
+      <svg class="animate-spin h-5 w-5 text-amber-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <span class="text-xs text-slate-400">Fixing issues… this may take a few minutes</span>
+    </span>
+  </div>
+  <div id="batch-fix-results"></div>
+  {% endif %}
+
+  {# Summary text #}
+  {% if report.summary %}
+  <p class="text-sm text-slate-400 leading-relaxed">{{ report.summary }}</p>
+  {% endif %}
+
+</div>
+
+
+{# ── ISSUE SECTIONS ────────────────────────────────────────────────────────── #}
+
+{% set section_config = [
+  ("character_issues",      "🧑 Character Issues",     "Character names, traits, or appearances that contradict across chapters",    "text-purple-400", "bg-purple-900/20", "border-purple-700/30"),
+  ("world_issues",          "🌍 World-Building Issues", "Locations, objects, or world details that don't match up",                   "text-blue-400",   "bg-blue-900/20",   "border-blue-700/30"),
+  ("timeline_issues",       "⏳ Timeline Issues",       "Events that happen in the wrong order or overlap impossibly",                "text-cyan-400",   "bg-cyan-900/20",   "border-cyan-700/30"),
+  ("tone_issues",           "🎭 Tone Issues",           "Unexpected shifts in voice, style, or mood between chapters",               "text-orange-400", "bg-orange-900/20", "border-orange-700/30"),
+  ("world_rule_violations", "📖 World Rule Violations", "Violations of your explicitly defined world rules",                         "text-red-400",    "bg-red-900/20",    "border-red-700/30"),
+  ("structural_notes",      "🏗 Structural Notes",      "Big-picture structural observations about consistency",                     "text-amber-400",  "bg-amber-900/20",  "border-amber-700/30"),
+] %}
+
+<div class="space-y-3 mb-8" id="issue-sections">
+
+  {% for section_key, section_title, section_desc, text_color, bg_color, border_color in section_config %}
+  {% set issues = report.get(section_key, []) %}
+
+  <div class="section-card bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
+       id="section-{{ section_key }}">
+
+    {# ── Collapsed header (always visible) #}
+    <div class="flex items-center justify-between px-5 py-3.5 cursor-pointer
+                hover:bg-slate-800/50 transition-colors"
+         onclick="toggleSection('{{ section_key }}')"
+         id="section-header-{{ section_key }}">
+
+      <div class="flex items-center gap-3 min-w-0">
+        {# Expand icon #}
+        <svg class="section-expand-icon w-4 h-4 text-slate-600 flex-shrink-0"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+
+        <span class="text-sm font-medium {{ text_color }}">{{ section_title }}</span>
+        <span class="text-xs text-slate-600">{{ section_desc }}</span>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0">
+        {% if issues | length == 0 %}
+          <span class="text-xs font-semibold text-green-400 bg-green-900/30 border border-green-700/40
+                       px-2.5 py-0.5 rounded-lg">
+            ✓ Clean
+          </span>
+        {% else %}
+          <span class="text-xs {{ text_color }} {{ bg_color }} border {{ border_color }}
+                       px-2.5 py-0.5 rounded-lg font-semibold">
+            {{ issues | length }}
+          </span>
+        {% endif %}
+      </div>
+
+    </div>{# end header #}
+
+    {# ── Expanded issue list (hidden by default) #}
+    <div class="section-body hidden border-t border-slate-800/60"
+         id="section-body-{{ section_key }}">
+
+      {% if issues | length == 0 %}
+        <p class="px-5 py-4 text-sm text-slate-500 text-center">No issues in this category.</p>
+
+      {% else %}
+        {# Section-level batch fix button #}
+        {% if section_key != 'structural_notes' and issues | length > 1 %}
+        <div class="px-5 py-3 bg-slate-800/30 border-b border-slate-800/60 flex items-center gap-3">
+          <button hx-post="/projects/{{ project.id }}/consistency/fix-section"
+                  hx-target="#section-fix-results-{{ section_key }}"
+                  hx-swap="innerHTML"
+                  hx-indicator="#section-fix-spinner-{{ section_key }}"
+                  hx-vals='{"section_key": "{{ section_key }}"}'
+                  hx-confirm="Auto-fix all {{ issues | length }} {{ section_title }} issues?"
+                  class="inline-flex items-center gap-1.5 text-xs bg-amber-500/15 hover:bg-amber-500/25
+                         text-amber-400 border border-amber-500/30 hover:border-amber-400/50
+                         py-1.5 px-3 rounded-lg transition-colors font-medium">
+            🔧 Auto-Fix All {{ section_title }} ({{ issues | length }})
+          </button>
+          <span id="section-fix-spinner-{{ section_key }}"
+                class="htmx-indicator inline-flex items-center gap-2">
+            <svg class="animate-spin h-4 w-4 text-amber-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <span class="text-xs text-slate-400">Fixing…</span>
+          </span>
+        </div>
+        <div id="section-fix-results-{{ section_key }}" class="px-5"></div>
+        {% endif %}
+
+        <div class="divide-y divide-slate-800/40">
+
+          {% for issue in issues %}
+          {% set sev = issue.get('severity', 'low') %}
+          {% set sev_styles = {
+            'high':   'text-red-400    bg-red-900/20    border-red-700/30',
+            'medium': 'text-amber-400  bg-amber-900/20  border-amber-700/30',
+            'low':    'text-slate-400  bg-slate-800/40  border-slate-700/30',
+          } %}
+          {% set sev_color = sev_styles.get(sev, sev_styles['low']) %}
+
+          <div class="flex items-start gap-3 px-5 py-3.5 {{ sev_color }} border-l-2 rounded-none">
+
+            {# Severity badge #}
+            <div class="flex-shrink-0 w-16 mt-0.5">
+              <span class="text-xs font-semibold uppercase tracking-wide">{{ sev }}</span>
+            </div>
+
+            {# Issue details #}
+            <div class="flex-1 min-w-0">
+
+              {# Issue description — varies by section type #}
+              {% if section_key == 'character_issues' %}
+                <div class="text-sm text-slate-200 font-medium mb-1">
+                  {{ issue.get('character', 'Unknown') }}
+                </div>
+                <div class="text-xs text-slate-400 leading-relaxed">
+                  {{ issue.get('issue', '') }}
+                </div>
+                <div class="text-xs text-slate-600 mt-1">
+                  Ch {{ issue.get('chapter_first', '?') }} → Ch {{ issue.get('chapter_conflict', '?') }}
+                </div>
+
+              {% elif section_key == 'world_issues' %}
+                <div class="text-sm text-slate-200 font-medium mb-1">
+                  {{ issue.get('element', 'Unknown') }}
+                </div>
+                <div class="text-xs text-slate-400 leading-relaxed">
+                  {{ issue.get('issue', '') }}
+                </div>
+                {% if issue.get('chapters_affected') %}
+                <div class="text-xs text-slate-600 mt-1">
+                  Chapters: {{ issue.get('chapters_affected', []) | join(', ') }}
+                </div>
+                {% endif %}
+
+              {% elif section_key == 'timeline_issues' %}
+                <div class="text-xs text-slate-400 leading-relaxed">
+                  {{ issue.get('issue', '') }}
+                </div>
+                {% if issue.get('chapters_affected') %}
+                <div class="text-xs text-slate-600 mt-1">
+                  Chapters: {{ issue.get('chapters_affected', []) | join(', ') }}
+                </div>
+                {% endif %}
+
+              {% elif section_key == 'tone_issues' %}
+                <div class="text-xs text-slate-400 leading-relaxed">
+                  {{ issue.get('issue', '') }}
+                </div>
+                {% if issue.get('chapter') %}
+                <div class="text-xs text-slate-600 mt-1">
+                  Chapter {{ issue.get('chapter', '?') }}
+                </div>
+                {% endif %}
+
+              {% elif section_key == 'world_rule_violations' %}
+                <div class="text-sm text-slate-200 font-medium mb-1">
+                  {{ issue.get('rule_title', 'Unknown Rule') }}
+                  {% if issue.get('rule_category') %}
+                    <span class="text-xs text-slate-600 font-normal ml-1">({{ issue.get('rule_category', '') }})</span>
+                  {% endif %}
+                </div>
+                <div class="text-xs text-slate-400 leading-relaxed">
+                  {{ issue.get('issue', '') }}
+                </div>
+                {% if issue.get('chapters_affected') %}
+                <div class="text-xs text-slate-600 mt-1">
+                  Chapters: {{ issue.get('chapters_affected', []) | join(', ') }}
+                </div>
+                {% endif %}
+
+              {% elif section_key == 'structural_notes' %}
+                <div class="text-xs text-slate-400 leading-relaxed">
+                  {{ issue.get('issue', '') }}
+                </div>
+                {% if issue.get('chapters_affected') %}
+                <div class="text-xs text-slate-600 mt-1">
+                  Chapters: {{ issue.get('chapters_affected', []) | join(', ') }}
+                </div>
+                {% endif %}
+              {% endif %}
+
+              {# Suggested fix (common to all) #}
+              {% if issue.get('suggested_fix') %}
+              <div class="text-xs mt-2 p-2 bg-slate-950/50 rounded border border-slate-800">
+                <span class="text-slate-500">💡 Fix:</span>
+                <span class="text-slate-300">{{ issue.get('suggested_fix', '') }}</span>
+              </div>
+              {% endif %}
+
+              {# Auto-Fix button — skip for structural_notes (advisory only) #}
+              {% if section_key != 'structural_notes' %}
+              <div class="mt-2">
+                <form hx-post="/projects/{{ project.id }}/consistency/fix/preview"
+                      hx-target="#fix-panel-{{ section_key }}-{{ loop.index0 }}"
+                      hx-swap="innerHTML"
+                      hx-indicator="#fix-spinner-{{ section_key }}-{{ loop.index0 }}">
+                  <input type="hidden" name="section_key" value="{{ section_key }}">
+                  <input type="hidden" name="issue_index" value="{{ loop.index0 }}">
+                  <button type="submit"
+                          class="flex items-center gap-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20
+                                 text-amber-400 border border-amber-500/30 hover:border-amber-400/50
+                                 py-1 px-3 rounded-lg transition-colors">
+                    <span>🔧</span>
+                    <span>Auto-Fix</span>
+                  </button>
+                </form>
+                <span id="fix-spinner-{{ section_key }}-{{ loop.index0 }}"
+                      class="htmx-indicator text-xs text-amber-400 ml-2">
+                  Generating fix…
+                </span>
+              </div>
+              <div id="fix-panel-{{ section_key }}-{{ loop.index0 }}"></div>
+              {% endif %}
+
+            </div>{# end flex-1 #}
+
+          </div>{# end issue row #}
+          {% endfor %}
+
+        </div>
+      {% endif %}
+
+    </div>{# end body #}
+  </div>{# end section-card #}
+  {% endfor %}
+
+</div>{# end issue-sections #}
+
+
+{# ── POSITIVE OBSERVATIONS ──────────────────────────────────────────────────── #}
+{% if report.get('positive_observations') %}
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-6">
+  <h3 class="text-sm font-semibold text-green-400 mb-3">✨ Positive Observations</h3>
+  <div class="space-y-2">
+    {% for obs in report.positive_observations %}
+    <div class="text-sm text-slate-400 leading-relaxed flex items-start gap-2">
+      <span class="text-green-500 mt-0.5 flex-shrink-0">•</span>
+      <span>{{ obs }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+
+{# ── BOTTOM ACTIONS ───────────────────────────────────────────────────────────── #}
+<div class="flex items-center justify-between pt-4 border-t border-slate-800">
+  <a href="/projects/{{ project.id }}/workbench"
+     class="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200 transition-colors">
+    <span>🛠</span>
+    <span>Fix issues in Workbench</span>
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+  </a>
+
+  <button onclick="runAgent('/projects/{{ project.id }}/consistency/run')"
+          class="flex items-center gap-2 text-sm bg-amber-500/10 hover:bg-amber-500/20
+                 text-amber-400 border border-amber-500/30 hover:border-amber-400/50
+                 py-2 px-4 rounded-xl transition-colors">
+    🔗 Re-run Consistency Check
+  </button>
+</div>
+
+{% else %}
+{# Report state exists but JSON unreadable #}
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
+  <p class="text-slate-500 text-sm">
+    Report file could not be read. Try running the consistency check again.
+  </p>
+</div>
+{% endif %}
+
+{% endif %}{# end not_run / report view #}
+
+{# ── Run overlay (outside if/else so it renders in ALL states) ───────────── #}
+<div id="run-overlay" class="hidden">
+  <div class="spinner"></div>
+  <div class="text-center">
+    <div class="text-lg font-serif text-amber-400 mb-2">Checking consistency…</div>
+    <div class="text-sm text-slate-400">Reading your entire manuscript and cross-referencing details.</div>
+    <div class="text-xs text-slate-600 mt-2">This takes 2–5 minutes for a full book.</div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  /* ── Section expand/collapse ─────────────────────────────────────────────── */
+  function toggleSection(key) {
+    var card = document.getElementById('section-' + key);
+    var body = document.getElementById('section-body-' + key);
+
+    if (!body) return;
+
+    var isOpen = !body.classList.contains('hidden');
+    if (isOpen) {
+      body.classList.add('hidden');
+      card.classList.remove('open');
+    } else {
+      body.classList.remove('hidden');
+      card.classList.add('open');
+    }
+  }
+
+  /* ── Loading overlay ─────────────────────────────────────────────────────── */
+  function showRunOverlay() {
+    var overlay = document.getElementById('run-overlay');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+      overlay.classList.add('active');
+    }
+  }
+
+  /* ── Run agent via fetch() — bypasses browser form POST issues ────────── */
+  function runAgent(url) {
+    showRunOverlay();
+    fetch(url, { method: 'POST', redirect: 'follow' })
+      .then(function(resp) {
+        // 303 redirect is followed automatically — reload the page
+        window.location.href = resp.url || window.location.pathname;
+      })
+      .catch(function(err) {
+        alert('Agent request failed: ' + err);
+        var overlay = document.getElementById('run-overlay');
+        if (overlay) overlay.classList.add('hidden');
+      });
+  }
+</script>
+{% endblock %}

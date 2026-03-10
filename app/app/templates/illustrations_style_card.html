@@ -1,0 +1,217 @@
+{#
+  illustrations_style_card.html
+  Single style card — used by HTMX swaps on create / update / get.
+  Context: project, style, edge_choices
+#}
+
+<div id="style-card-{{ style.id }}"
+     class="bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col gap-3 htmx-added">
+
+  {# ── Header: name + default badge ── #}
+  <div class="flex items-start justify-between gap-2">
+    <div class="min-w-0">
+      <div class="font-medium text-slate-100 leading-snug truncate" title="{{ style.name }}">
+        {{ style.name }}
+      </div>
+    </div>
+    {% if style.is_default %}
+    <span class="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full
+                 bg-amber-400/15 border border-amber-400/40 text-amber-400 text-xs font-medium">
+      ⭐ Default
+    </span>
+    {% endif %}
+  </div>
+
+  {# ── Description preview ── #}
+  <p class="text-xs text-slate-400 leading-relaxed line-clamp-3 min-h-[2.5rem]">
+    {% if style.style_input %}
+      {{ style.style_input }}
+    {% else %}
+      <span class="italic text-slate-600">No description yet.</span>
+    {% endif %}
+  </p>
+
+  {# ── Generated style profile (shown if AI has filled it in) ── #}
+  {% if style.style_profile and style.style_profile.keys()|list|length > 0 %}
+  <div class="bg-slate-900/60 border border-slate-700/40 rounded-lg p-3 space-y-1.5 text-xs">
+    {% if style.style_profile.medium %}
+    <div class="flex gap-1.5">
+      <span class="text-slate-600 w-20 flex-shrink-0">Medium</span>
+      <span class="text-slate-300">{{ style.style_profile.medium }}</span>
+    </div>
+    {% endif %}
+    {% if style.style_profile.palette %}
+    <div class="flex gap-1.5">
+      <span class="text-slate-600 w-20 flex-shrink-0">Palette</span>
+      <span class="text-slate-300">{{ style.style_profile.palette }}</span>
+    </div>
+    {% endif %}
+    {% if style.style_profile.lighting %}
+    <div class="flex gap-1.5">
+      <span class="text-slate-600 w-20 flex-shrink-0">Lighting</span>
+      <span class="text-slate-300">{{ style.style_profile.lighting }}</span>
+    </div>
+    {% endif %}
+    {% if style.style_profile.mood %}
+    <div class="flex gap-1.5">
+      <span class="text-slate-600 w-20 flex-shrink-0">Mood</span>
+      <span class="text-slate-300">{{ style.style_profile.mood }}</span>
+    </div>
+    {% endif %}
+    {% if style.style_profile.negative %}
+    <div class="flex gap-1.5">
+      <span class="text-slate-600 w-20 flex-shrink-0 text-red-500/70">Avoid</span>
+      <span class="text-red-400/70 italic truncate" title="{{ style.style_profile.negative }}">{{ style.style_profile.negative }}</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# ── Edge style label ── #}
+  <div class="flex items-center gap-1.5">
+    <span class="text-xs text-slate-600 uppercase tracking-wider">Edge:</span>
+    <span class="text-xs font-medium text-slate-400 capitalize">{{ style.container_mask or "straight" }}</span>
+  </div>
+
+  {# ── Divider ── #}
+  <div class="border-t border-slate-700/60"></div>
+
+  {# ── Actions ── #}
+  <div class="flex items-center gap-2 flex-wrap" id="style-card-actions-{{ style.id }}">
+
+    {# Generate Profile — calls AI to fill in structured style_profile #}
+    <button
+      hx-post="/projects/{{ project.id }}/illustrations/styles/{{ style.id }}/generate-profile"
+      hx-target="#style-card-{{ style.id }}"
+      hx-swap="outerHTML"
+      hx-indicator="#profile-spinner-{{ style.id }}"
+      hx-disabled-elt="this"
+      title="Use AI to generate a structured style profile from the description"
+      class="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg
+             border border-violet-600/50 text-violet-400
+             hover:border-violet-400 hover:text-violet-300 transition-colors cursor-pointer">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M13 10V3L4 14h7v7l9-11h-7z"/>
+      </svg>
+      {% if style.style_profile and style.style_profile.keys()|list|length > 0 %}
+        Re-generate
+      {% else %}
+        Generate Profile
+      {% endif %}
+      <svg id="profile-spinner-{{ style.id }}"
+           class="htmx-indicator w-3 h-3 animate-spin text-violet-400"
+           fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+    </button>
+
+    {% if not style.is_default %}
+    {# Set Default — returns full style list (all badges must update) #}
+    <button
+      hx-post="/projects/{{ project.id }}/illustrations/styles/{{ style.id }}/set-default"
+      hx-target="#style-card-grid"
+      hx-swap="innerHTML"
+      class="text-xs px-2.5 py-1 rounded-lg border border-slate-600 text-slate-400
+             hover:border-amber-400/60 hover:text-amber-400 transition-colors cursor-pointer">
+      Set Default
+    </button>
+    {% endif %}
+
+    {# Edit — toggles inline edit form #}
+    <button
+      onclick="toggleEditForm({{ style.id }})"
+      class="text-xs px-2.5 py-1 rounded-lg border border-slate-600 text-slate-400
+             hover:border-slate-400 hover:text-slate-200 transition-colors cursor-pointer">
+      Edit
+    </button>
+
+    {# Delete ── returns empty string; HTMX swaps outerHTML (removes card) #}
+    <button
+      hx-delete="/projects/{{ project.id }}/illustrations/styles/{{ style.id }}"
+      hx-target="#style-card-{{ style.id }}"
+      hx-swap="outerHTML"
+      hx-confirm="Delete '{{ style.name }}'? This cannot be undone."
+      class="text-xs px-2.5 py-1 rounded-lg border border-red-800/60 text-red-500/70
+             hover:border-red-500 hover:text-red-400 transition-colors cursor-pointer">
+      🗑
+    </button>
+  </div>
+
+  {# ── Inline edit form (hidden by default) ── #}
+  <div id="edit-form-{{ style.id }}" class="hidden mt-1">
+    <form
+      hx-put="/projects/{{ project.id }}/illustrations/styles/{{ style.id }}"
+      hx-target="#style-card-{{ style.id }}"
+      hx-swap="outerHTML"
+      class="flex flex-col gap-3">
+
+      <div>
+        <label class="text-xs text-slate-500 block mb-1">Name</label>
+        <input type="text" name="name" value="{{ style.name }}"
+               required
+               class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5
+                      text-sm text-slate-100 placeholder-slate-600
+                      focus:outline-none focus:border-amber-400/60 transition-colors" />
+      </div>
+
+      <div>
+        <label class="text-xs text-slate-500 block mb-1">Description</label>
+        <textarea name="style_input" rows="3"
+                  class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5
+                         text-sm text-slate-100 placeholder-slate-600 resize-none
+                         focus:outline-none focus:border-amber-400/60 transition-colors">{{ style.style_input }}</textarea>
+      </div>
+
+      <div>
+        <label class="text-xs text-slate-500 block mb-1">Edge Style</label>
+        {% set is_custom_edge = style.container_mask and style.container_mask not in edge_choices %}
+        <select name="container_mask_select"
+                onchange="toggleCustomEdge(this, 'edit-custom-edge-{{ style.id }}', 'edit-container-mask-{{ style.id }}')"
+                class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5
+                       text-sm text-slate-100
+                       focus:outline-none focus:border-amber-400/60 transition-colors">
+          {% for ec in edge_choices %}
+          <option value="{{ ec }}" {% if ec == style.container_mask %}selected{% endif %}>
+            {{ ec | capitalize }}
+          </option>
+          {% endfor %}
+          <option value="__custom__" {% if is_custom_edge %}selected{% endif %}>Custom…</option>
+        </select>
+        <input type="text" id="edit-custom-edge-{{ style.id }}" name="container_mask_custom"
+               placeholder="e.g. 'watercolor bleed' or 'ink splatter fade'"
+               value="{{ style.container_mask if is_custom_edge else '' }}"
+               style="{{ '' if is_custom_edge else 'display:none' }}"
+               class="w-full mt-1.5 bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5
+                      text-sm text-slate-100 placeholder-slate-600
+                      focus:outline-none focus:border-amber-400/60 transition-colors" />
+        <input type="hidden" id="edit-container-mask-{{ style.id }}" name="container_mask"
+               value="{{ style.container_mask or 'straight' }}" />
+      </div>
+
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" name="is_default" value="true"
+               {% if style.is_default %}checked{% endif %}
+               class="w-3.5 h-3.5 accent-amber-400" />
+        <span class="text-xs text-slate-400">Set as default</span>
+      </label>
+
+      <div class="flex gap-2 mt-1">
+        <button type="submit"
+                class="flex-1 text-xs px-3 py-1.5 rounded-lg bg-amber-400 text-slate-950
+                       font-semibold hover:bg-amber-300 transition-colors cursor-pointer">
+          Save
+        </button>
+        <button type="button"
+                onclick="toggleEditForm({{ style.id }})"
+                class="text-xs px-3 py-1.5 rounded-lg border border-slate-600 text-slate-400
+                       hover:text-slate-200 transition-colors cursor-pointer">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>

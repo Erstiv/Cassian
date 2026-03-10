@@ -1,0 +1,143 @@
+{#
+  A single chapter card — editable inline.
+  Used in framework_outline.html (included in a loop) and returned directly
+  by POST /framework/chapter/{index}.
+
+  Context vars: request, project, ch, index (or loop_index), act_breaks
+#}
+
+{% set idx = index if index is defined else loop_index %}
+
+{# Intensity dots: 1-5 filled dots #}
+{% set intensity_map = {"low": 1, "medium": 3, "high": 5} %}
+{% set dots = intensity_map.get(ch.intensity, 3) %}
+
+<div id="chapter-card-{{ idx }}"
+     class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden group">
+
+  {# ── Card header ──────────────────────────────────────────────────────── #}
+  <div class="px-5 py-3 border-b border-slate-800 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="text-xs font-mono text-slate-500 flex-shrink-0">Ch {{ ch.number }}</span>
+      <span class="text-sm font-medium text-slate-100 truncate">{{ ch.title or '(untitled)' }}</span>
+    </div>
+    <div class="flex items-center gap-3 flex-shrink-0">
+      {# Intensity dots #}
+      <div class="flex items-center gap-0.5" title="Intensity: {{ ch.intensity or 'medium' }}">
+        {% for i in range(5) %}
+        <div class="w-2 h-2 rounded-full {% if i < dots %}bg-amber-400{% else %}bg-slate-700{% endif %}"></div>
+        {% endfor %}
+      </div>
+      {# Edit toggle #}
+      <button onclick="toggleEdit({{ idx }})"
+              class="text-xs text-slate-500 hover:text-amber-400 transition-colors px-2 py-1 rounded
+                     bg-slate-800 hover:bg-slate-700">
+        Edit
+      </button>
+    </div>
+  </div>
+
+  {# ── Read view ────────────────────────────────────────────────────────── #}
+  <div id="card-view-{{ idx }}" class="px-5 py-4 space-y-2">
+    <p class="text-sm text-slate-300 leading-relaxed">{{ ch.summary or '(no summary)' }}</p>
+    {% if ch.purpose %}
+    <p class="text-xs text-slate-500">
+      <span class="text-slate-600 uppercase tracking-wide text-[10px] font-semibold">Purpose:</span>
+      {{ ch.purpose }}
+    </p>
+    {% endif %}
+    {% if ch.characters %}
+    <p class="text-xs text-slate-600">
+      <span class="text-slate-700 uppercase tracking-wide text-[10px] font-semibold">Characters:</span>
+      {{ ch.characters | join(', ') }}
+    </p>
+    {% endif %}
+
+    {# Move up / down buttons #}
+    <div class="flex items-center gap-2 pt-2">
+      <form hx-post="/projects/{{ project.id }}/framework/chapter/{{ idx }}/move"
+            hx-target="#framework-outline"
+            hx-swap="outerHTML">
+        <input type="hidden" name="direction" value="up">
+        <button type="submit"
+                class="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-400
+                       rounded transition-colors border border-slate-700">
+          ↑ Up
+        </button>
+      </form>
+      <form hx-post="/projects/{{ project.id }}/framework/chapter/{{ idx }}/move"
+            hx-target="#framework-outline"
+            hx-swap="outerHTML">
+        <input type="hidden" name="direction" value="down">
+        <button type="submit"
+                class="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-400
+                       rounded transition-colors border border-slate-700">
+          ↓ Down
+        </button>
+      </form>
+      <form hx-post="/projects/{{ project.id }}/framework/chapter/{{ idx }}/delete"
+            hx-target="#framework-outline"
+            hx-swap="outerHTML"
+            hx-confirm="Delete Chapter {{ ch.number }}: {{ ch.title }}?"
+            class="ml-auto">
+        <button type="submit"
+                class="px-2 py-1 text-xs bg-red-900/30 hover:bg-red-900/60 text-red-400
+                       rounded transition-colors border border-red-800/40">
+          Delete
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {# ── Edit view (hidden by default) ────────────────────────────────────── #}
+  <div id="card-edit-{{ idx }}" class="hidden px-5 py-4 bg-slate-800/40">
+    <form hx-post="/projects/{{ project.id }}/framework/chapter/{{ idx }}"
+          hx-target="#chapter-card-{{ idx }}"
+          hx-swap="outerHTML"
+          class="space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-slate-400 mb-1">Title</label>
+        <input type="text" name="title" value="{{ ch.title or '' }}"
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                      text-sm text-slate-100 focus:outline-none focus:border-amber-500/70">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-400 mb-1">Summary</label>
+        <textarea name="summary" rows="3"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                         text-sm text-slate-100 focus:outline-none focus:border-amber-500/70 resize-none">{{ ch.summary or '' }}</textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-400 mb-1">Notes (private)</label>
+        <input type="text" name="notes" value="{{ ch.notes or '' }}"
+               placeholder="Optional private notes for this chapter..."
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                      text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500/70">
+      </div>
+      <div class="flex gap-2">
+        <button type="submit"
+                class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-semibold
+                       rounded-lg transition-colors">
+          Save
+        </button>
+        <button type="button" onclick="toggleEdit({{ idx }})"
+                class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs
+                       rounded-lg transition-colors">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+
+<script>
+  function toggleEdit(idx) {
+    const view = document.getElementById('card-view-' + idx);
+    const edit = document.getElementById('card-edit-' + idx);
+    if (view && edit) {
+      view.classList.toggle('hidden');
+      edit.classList.toggle('hidden');
+    }
+  }
+</script>

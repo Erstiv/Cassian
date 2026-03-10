@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% set active_page = "framework" %}
+
+{% block title %}Framework — {{ project.name }}{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <div class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Phase 1: Genesis</div>
+    <h1 class="text-xl font-semibold text-slate-100 flex items-center gap-2">
+      🏗 Framework
+    </h1>
+  </div>
+  <div class="text-sm text-slate-500">{{ project.name }}</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8">
+
+  {# ── Context notice if project already has chapters ───────────────────── #}
+  {% if chapters_db and chapters_db|length > 0 %}
+  <div class="bg-amber-900/20 border border-amber-700/40 rounded-xl px-5 py-3 flex items-center gap-3">
+    <span class="text-amber-400 text-lg">⚠</span>
+    <p class="text-sm text-amber-300">
+      This project already has <strong>{{ chapters_db|length }} chapters</strong> in the database.
+      Applying a new framework will update chapter titles but won't delete existing manuscript data.
+    </p>
+  </div>
+  {% endif %}
+
+  {# ── Generator Panel ─────────────────────────────────────────────────────── #}
+  <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-slate-200 tracking-wide uppercase">Chapter Outline Generator</h2>
+      {% if not brainstorm %}
+      <a href="/projects/{{ project.id }}/idea"
+         class="text-xs text-amber-400 hover:text-amber-300 transition-colors">
+        💡 No idea brainstorm yet — run Idea Agent first for best results
+      </a>
+      {% else %}
+      <span class="text-xs text-slate-500">Using brainstorm from Idea Agent</span>
+      {% endif %}
+    </div>
+
+    <form hx-post="/projects/{{ project.id }}/framework/generate"
+          hx-target="#framework-outline"
+          hx-swap="outerHTML"
+          hx-indicator="#generate-spinner"
+          class="p-6 space-y-5">
+
+      <div class="grid grid-cols-2 gap-5">
+        {# Chapter count #}
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Number of Chapters</label>
+          <input type="number" name="chapter_count"
+                 value="{{ framework.chapters|length if framework and framework.chapters else project.chapter_count or 20 }}"
+                 min="1" max="200"
+                 class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                        text-sm text-slate-100 focus:outline-none focus:border-amber-500/70">
+        </div>
+
+        {# Structure type #}
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Structure Type</label>
+          <select name="structure_type"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                         text-sm text-slate-100 focus:outline-none focus:border-amber-500/70">
+            <option value="three_act" {% if framework and framework.structure_type == "three_act" %}selected{% endif %}>Three-Act Structure</option>
+            <option value="hero_journey" {% if framework and framework.structure_type == "hero_journey" %}selected{% endif %}>Hero's Journey</option>
+            <option value="nonlinear" {% if framework and framework.structure_type == "nonlinear" %}selected{% endif %}>Nonlinear</option>
+            <option value="episodic" {% if framework and framework.structure_type == "episodic" %}selected{% endif %}>Episodic</option>
+            <option value="custom" {% if framework and framework.structure_type == "custom" %}selected{% endif %}>Custom / Freeform</option>
+          </select>
+        </div>
+      </div>
+
+      {# Notes #}
+      <div>
+        <label class="block text-xs font-medium text-slate-400 mb-1.5">Notes for the Outline</label>
+        <textarea name="notes" rows="2"
+                  placeholder="Any specific guidance: key plot points to hit, acts to emphasise, POV structure, etc."
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                         text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500/70
+                         resize-none"></textarea>
+      </div>
+
+      <div class="flex items-center gap-3 pt-1">
+        <button type="submit"
+                class="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400
+                       text-slate-900 text-sm font-semibold rounded-lg transition-colors">
+          <span class="htmx-indicator hidden" id="generate-spinner">
+            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          </span>
+          ✨ Generate Outline
+        </button>
+        <span class="text-xs text-slate-600">Uses Gemini 2.5 Pro · ~30–60 seconds</span>
+      </div>
+    </form>
+  </div>
+
+  {# ── Outline Display (HTMX target or pre-populated) ──────────────────────── #}
+  {% if framework and framework.chapters %}
+    {% include "framework_outline.html" %}
+  {% elif chapters_db and chapters_db|length > 0 %}
+    {# Show existing DB chapters as a read-only list until an outline is generated #}
+    <div id="framework-outline" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-slate-300">
+          Existing Chapters ({{ chapters_db|length }}) — from database
+        </h3>
+        <span class="text-xs text-slate-500">Generate an outline above to build a new framework</span>
+      </div>
+      <div class="space-y-2">
+        {% for ch in chapters_db %}
+        <div class="bg-slate-900/60 border border-slate-800 rounded-xl px-5 py-3 flex items-center gap-4">
+          <span class="text-xs font-mono text-slate-500 w-8 flex-shrink-0 text-right">
+            {{ ch.chapter_number or '?' }}
+          </span>
+          <span class="text-sm text-slate-300">{{ ch.title or ch.chapter_name or '(untitled)' }}</span>
+          {% if ch.word_count %}
+          <span class="ml-auto text-xs text-slate-600">{{ '{:,}'.format(ch.word_count) }} words</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <div id="framework-outline"></div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.body.addEventListener('htmx:beforeRequest', function() {
+    const s = document.getElementById('generate-spinner');
+    if (s) s.classList.remove('hidden');
+  });
+  document.body.addEventListener('htmx:afterRequest', function() {
+    const s = document.getElementById('generate-spinner');
+    if (s) s.classList.add('hidden');
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% set active_page = "cover" %}
+
+{% block title %}Cover Design — {{ project.name }} — Cassian{% endblock %}
+
+{% block head %}
+<style>
+  /* Wraparound diagram */
+  .cover-diagram {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    overflow: hidden;
+    min-height: 100px;
+  }
+  .cover-back  { background: #1e3a5f; flex: 1; }
+  .cover-spine { background: #1a2e4a; flex: 0 0 auto; min-width: 32px; }
+  .cover-front { background: #1e3a5f; flex: 1; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+      <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+      <span>›</span>
+      <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+      <span>›</span>
+      <span class="text-slate-400">Cover Design</span>
+    </div>
+    <h1 class="font-serif text-2xl text-slate-100">Cover Design</h1>
+    <p class="text-sm text-slate-500 mt-0.5">
+      Publisher profile, spine calculator, and back-cover blurb
+    </p>
+  </div>
+
+  <div class="flex items-center gap-3">
+    {# Status badge #}
+    {% if cover %}
+      {% if cover.status.value == "approved" %}
+        <span class="text-xs bg-green-900/40 text-green-400 border border-green-700/40 px-3 py-1.5 rounded-lg">
+          ✅ Approved
+        </span>
+      {% elif cover.status.value == "complete" %}
+        <span class="text-xs bg-blue-900/40 text-blue-400 border border-blue-700/40 px-3 py-1.5 rounded-lg">
+          ✓ Complete
+        </span>
+      {% elif cover.status.value == "generating" %}
+        <span class="text-xs bg-amber-900/40 text-amber-400 border border-amber-700/40 px-3 py-1.5 rounded-lg">
+          ⟳ Generating…
+        </span>
+      {% elif cover.status.value == "failed" %}
+        <span class="text-xs bg-red-900/40 text-red-400 border border-red-700/40 px-3 py-1.5 rounded-lg">
+          ✗ Failed
+        </span>
+      {% else %}
+        <span class="text-xs bg-slate-800 text-slate-400 border border-slate-700 px-3 py-1.5 rounded-lg">
+          Pending
+        </span>
+      {% endif %}
+    {% else %}
+      <span class="text-xs bg-slate-800 text-slate-500 border border-slate-700 px-3 py-1.5 rounded-lg">
+        Not started
+      </span>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  SECTION 1: Configuration — Publisher Profile + Spine Calculator            #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+
+<div id="cover-config-panel">
+  {% include "fragments/cover_config_panel.html" %}
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  SECTION 2: Cover Text Overlay Settings                                     #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+
+<div class="mt-6" id="cover-text-settings-panel">
+  {% set settings = text_settings %}
+  {% include "fragments/cover_text_settings.html" %}
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  SECTION 3: Blurb Editor + Cover Preview                                    #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+
+<div class="mt-6 grid grid-cols-2 gap-6">
+
+  {# ── Left: Back Cover Blurb ─────────────────────────────────────────────── #}
+  <div id="cover-blurb-panel">
+    {% include "fragments/cover_blurb_panel.html" %}
+  </div>
+
+  {# ── Right: Cover Art (AI generation + approval — Session 9b) ───────────── #}
+  <div id="cover-preview-panel">
+    {% include "fragments/cover_preview_panel.html" %}
+  </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  // ── Live character / word count for the blurb textarea ──────────────────────
+  function updateBlurbCount() {
+    const textarea = document.getElementById('blurb-textarea');
+    const countEl  = document.getElementById('blurb-count');
+    if (!textarea || !countEl) return;
+
+    const text  = textarea.value;
+    const chars = text.length;
+    const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+
+    const charLimit = 1200;
+    const charColor = chars > charLimit ? 'text-amber-400' : 'text-slate-500';
+
+    countEl.innerHTML =
+      `<span class="${charColor}">${chars} / ${charLimit} chars</span>` +
+      `<span class="mx-2 text-slate-700">|</span>` +
+      `<span class="text-slate-500">${words} words</span>`;
+  }
+
+  // Re-bind after HTMX swaps any panel
+  document.addEventListener('htmx:afterSwap', function(evt) {
+    const id = evt.detail.target.id;
+    if (id === 'cover-blurb-panel' || id === 'cover-config-panel') {
+      updateBlurbCount();
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', updateBlurbCount);
+</script>
+{% endblock %}

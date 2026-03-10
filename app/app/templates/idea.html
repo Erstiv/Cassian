@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% set active_page = "idea" %}
+
+{% block title %}Idea Agent — {{ project.name }}{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <div class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Phase 1: Genesis</div>
+    <h1 class="text-xl font-semibold text-slate-100 flex items-center gap-2">
+      💡 Idea Agent
+    </h1>
+  </div>
+  <div class="text-sm text-slate-500">{{ project.name }}</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8">
+
+  {# ── Input Panel ──────────────────────────────────────────────────────────── #}
+  <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-slate-200 tracking-wide uppercase">Book Concept Brainstorm</h2>
+      {% if brainstorm %}
+      <span class="text-xs text-slate-500 flex items-center gap-1.5">
+        Last generated <span data-localtime="{{ brainstorm.generated_at }}" data-localtime-format="date">{{ brainstorm.generated_at[:10] }}</span>
+      </span>
+      {% endif %}
+    </div>
+
+    <form hx-post="/projects/{{ project.id }}/idea/brainstorm"
+          hx-target="#brainstorm-results"
+          hx-swap="outerHTML"
+          hx-indicator="#brainstorm-spinner"
+          class="p-6 space-y-5">
+
+      <div class="grid grid-cols-2 gap-5">
+        {# Genre #}
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Genre</label>
+          <select name="genre"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                         text-sm text-slate-100 focus:outline-none focus:border-amber-500/70">
+            {% set genres = [("fiction","Fiction"),("sci-fi","Science Fiction"),
+                              ("fantasy","Fantasy"),("thriller","Thriller"),
+                              ("romance","Romance"),("memoir","Memoir"),
+                              ("nonfiction","Nonfiction"),("business","Business"),
+                              ("poetry","Poetry"),("cookbook","Cookbook"),
+                              ("children","Children's"),("other","Other")] %}
+            {% for val, label in genres %}
+            <option value="{{ val }}"
+              {% if (brainstorm and brainstorm.inputs and brainstorm.inputs.genre == val) or project.genre == val %}selected{% endif %}>
+              {{ label }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {# Audience #}
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Target Audience</label>
+          <select name="audience"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                         text-sm text-slate-100 focus:outline-none focus:border-amber-500/70">
+            <option value="adult" {% if brainstorm and brainstorm.inputs and brainstorm.inputs.audience == "adult" %}selected{% endif %}>Adult</option>
+            <option value="young adult" {% if brainstorm and brainstorm.inputs and brainstorm.inputs.audience == "young adult" %}selected{% endif %}>Young Adult</option>
+            <option value="middle grade" {% if brainstorm and brainstorm.inputs and brainstorm.inputs.audience == "middle grade" %}selected{% endif %}>Middle Grade</option>
+            <option value="children" {% if brainstorm and brainstorm.inputs and brainstorm.inputs.audience == "children" %}selected{% endif %}>Children</option>
+            <option value="general" {% if brainstorm and brainstorm.inputs and brainstorm.inputs.audience == "general" %}selected{% endif %}>General / All ages</option>
+          </select>
+        </div>
+      </div>
+
+      {# Themes #}
+      <div>
+        <label class="block text-xs font-medium text-slate-400 mb-1.5">Themes</label>
+        <textarea name="themes" rows="2"
+                  placeholder="e.g. identity, loss, technology, redemption, memory, survival"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                         text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500/70
+                         resize-none">{{ (brainstorm.inputs.themes if brainstorm and brainstorm.inputs else '') }}</textarea>
+      </div>
+
+      {# Tone #}
+      <div>
+        <label class="block text-xs font-medium text-slate-400 mb-1.5">Tone &amp; Voice</label>
+        <select name="tone"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                       text-sm text-slate-100 focus:outline-none focus:border-amber-500/70">
+          {% set tones = [
+            ("","— select or type below —"),
+            ("dark and literary","Dark &amp; literary"),
+            ("lyrical and poetic","Lyrical &amp; poetic"),
+            ("fast-paced thriller","Fast-paced thriller"),
+            ("warm and humorous","Warm &amp; humorous"),
+            ("epic and mythological","Epic &amp; mythological"),
+            ("intimate and confessional","Intimate &amp; confessional"),
+            ("satirical","Satirical"),
+            ("matter-of-fact","Matter-of-fact"),
+            ("other","Other (describe in inspirations)"),
+          ] %}
+          {% for val, label in tones %}
+          <option value="{{ val }}"
+            {% if brainstorm and brainstorm.inputs and brainstorm.inputs.tone == val %}selected{% endif %}>
+            {{ label }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {# Inspirations #}
+      <div>
+        <label class="block text-xs font-medium text-slate-400 mb-1.5">Inspirations &amp; Comparables</label>
+        <textarea name="inspirations" rows="2"
+                  placeholder='e.g. "Cormac McCarthy meets Solaris" or "Donna Tartt, Elena Ferrante, dark academia"'
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                         text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500/70
+                         resize-none">{{ (brainstorm.inputs.inspirations if brainstorm and brainstorm.inputs else '') }}</textarea>
+      </div>
+
+      {# Submit #}
+      <div class="flex items-center gap-3 pt-1">
+        <button type="submit"
+                class="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400
+                       text-slate-900 text-sm font-semibold rounded-lg transition-colors">
+          <span class="htmx-indicator hidden" id="brainstorm-spinner">
+            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          </span>
+          ✨ Brainstorm
+        </button>
+        <span class="text-xs text-slate-600">Uses Gemini 2.5 Pro · ~20–40 seconds</span>
+      </div>
+    </form>
+  </div>
+
+  {# ── Results (loaded via HTMX or pre-populated if brainstorm exists) ──────── #}
+  {% if brainstorm %}
+    {% include "idea_results.html" %}
+  {% else %}
+    <div id="brainstorm-results"></div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Show spinner inside button while htmx request is in flight
+  document.body.addEventListener('htmx:beforeRequest', function(evt) {
+    const spinner = document.getElementById('brainstorm-spinner');
+    if (spinner) spinner.classList.remove('hidden');
+  });
+  document.body.addEventListener('htmx:afterRequest', function(evt) {
+    const spinner = document.getElementById('brainstorm-spinner');
+    if (spinner) spinner.classList.add('hidden');
+  });
+</script>
+{% endblock %}

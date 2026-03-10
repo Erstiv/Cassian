@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} — Cassian{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+      <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+      <span>›</span>
+      <span class="text-slate-400">{{ project.name }}</span>
+    </div>
+    <h1 class="font-serif text-2xl text-slate-100">{{ project.name }}</h1>
+    <p class="text-sm text-slate-500 mt-0.5">{{ project.author }}</p>
+  </div>
+
+  <!-- Status badge -->
+  <span class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full
+    {% if project.status.value == 'complete' %}
+      bg-emerald-900/50 text-emerald-400 border border-emerald-800
+    {% elif project.status.value == 'active' %}
+      bg-blue-900/50 text-blue-400 border border-blue-800
+    {% else %}
+      bg-slate-800 text-slate-400 border border-slate-700
+    {% endif %}">
+    <span class="w-1.5 h-1.5 rounded-full
+      {% if project.status.value == 'complete' %}bg-emerald-400
+      {% elif project.status.value == 'active' %}bg-blue-400
+      {% else %}bg-slate-500{% endif %}"></span>
+    {{ project.status.value | capitalize }}
+  </span>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if ingested_count is defined and ingested_count > 0 %}
+<div class="mb-6 bg-emerald-900/20 border border-emerald-700/40 rounded-xl px-6 py-4 flex items-center justify-between">
+  <div>
+    <div class="text-emerald-300 font-medium text-sm flex items-center gap-2">
+      <span class="text-lg">✓</span>
+      {{ ingested_count }} chapter{{ 's' if ingested_count != 1 else '' }} already ingested via Draft Writer
+    </div>
+    <p class="text-emerald-400/60 text-xs mt-1">
+      Your chapters are ready for the pipeline. You can skip upload and go straight to editing.
+    </p>
+  </div>
+  <div class="flex gap-2">
+    <a href="/projects/{{ project.id }}/workbench"
+       class="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold rounded-lg text-sm transition-colors">
+      Go to Workbench →
+    </a>
+  </div>
+</div>
+{% endif %}
+
+<div class="grid grid-cols-3 gap-6">
+
+  <!-- ── Left column (2/3 width) ──────────────────────────────── -->
+  <div class="col-span-2 space-y-6">
+
+    <!-- Upload manuscript -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+      <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">
+        Manuscript
+      </h2>
+
+      <!-- Upload form — uses HTMX so the page doesn't reload -->
+      <form hx-post="/projects/{{ project.id }}/upload"
+            hx-target="#upload-result"
+            hx-swap="innerHTML"
+            hx-encoding="multipart/form-data"
+            hx-indicator="#upload-spinner"
+            class="flex items-center gap-3 mb-3">
+        <input type="file" name="files" accept=".zip,.docx,.doc,.txt" multiple required
+               class="block text-sm text-slate-400 flex-1
+                      file:mr-3 file:py-2 file:px-4
+                      file:rounded-lg file:border-0
+                      file:bg-slate-700 file:text-slate-200 file:text-sm
+                      file:cursor-pointer file:hover:bg-slate-600
+                      file:transition-colors" />
+        <button type="submit"
+                class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm
+                       font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0
+                       flex items-center gap-2">
+          <span id="upload-spinner" class="htmx-indicator">
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          </span>
+          Upload
+        </button>
+      </form>
+
+      <!-- HTMX swaps this div with the upload result fragment -->
+      <div id="upload-result" class="mb-3"></div>
+
+      <!-- ── Chapter order list ──────────────────────────────────── -->
+      {% if chapters %}
+      <div class="mt-2">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-slate-500">
+            {{ chapters | length }} file{{ 's' if chapters | length != 1 else '' }} — drag to set reading order
+          </p>
+          <button id="save-order-btn"
+                  onclick="saveOrder()"
+                  class="hidden text-xs bg-amber-500 hover:bg-amber-400 text-slate-950
+                         font-semibold px-3 py-1 rounded-lg transition-colors">
+            Save order
+          </button>
+        </div>
+
+        <div id="chapter-list" class="space-y-1.5">
+          {% for ch in chapters %}
+          <div class="chapter-item flex items-center gap-2.5 px-3 py-2
+                      bg-slate-800/70 border border-slate-700/50 rounded-lg
+                      cursor-grab active:cursor-grabbing select-none
+                      hover:border-slate-600 transition-colors"
+               data-filename="{{ ch.filename }}">
+
+            <!-- Drag handle dots -->
+            <svg class="w-3.5 h-3.5 text-slate-600 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
+              <circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/>
+              <circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/>
+              <circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/>
+            </svg>
+
+            <!-- Position number -->
+            <span class="chapter-pos text-xs text-slate-600 font-mono w-5 text-center flex-shrink-0">
+              {{ loop.index }}
+            </span>
+
+            <!-- File stem (display name) -->
+            <span class="text-sm text-slate-200 truncate flex-1">{{ ch.stem }}</span>
+
+            <!-- Extension badge -->
+            <span class="text-xs text-slate-600 flex-shrink-0 font-mono">
+              .{{ ch.filename.rsplit('.', 1)[-1] }}
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+
+        <p id="order-status" class="text-xs text-slate-700 mt-2 text-right"></p>
+      </div>
+      {% else %}
+        <p class="text-xs text-slate-600 mt-1">
+          No files yet. Upload
+          <code class="text-amber-500">.docx</code> files or a
+          <code class="text-amber-500">.zip</code> — filenames become section titles.
+        </p>
+      {% endif %}
+    </div>
+
+    <!-- Pipeline Runs -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+          Pipeline Runs
+        </h2>
+        {% if project.chapter_count %}
+        <a href="/projects/{{ project.id }}/runs/new"
+           class="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300
+                  transition-colors font-medium">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          New Run
+        </a>
+        {% endif %}
+      </div>
+
+      {% if runs %}
+        <div class="space-y-2">
+          {% for run in runs %}
+          <div class="flex items-center justify-between p-3 bg-slate-800/60
+                      border border-slate-700/60 rounded-lg
+                      hover:border-slate-600 transition-colors cursor-pointer"
+               onclick="window.location='/projects/{{ project.id }}/runs/{{ run.id }}'">
+
+            <div class="flex items-center gap-3">
+              <!-- Status dot -->
+              <span class="w-2 h-2 rounded-full flex-shrink-0
+                {% if run.status.value == 'complete' %}bg-emerald-400
+                {% elif run.status.value == 'running' %}bg-blue-400 animate-pulse
+                {% elif run.status.value == 'paused' %}bg-yellow-400
+                {% elif run.status.value == 'failed' %}bg-red-400
+                {% else %}bg-slate-600{% endif %}">
+              </span>
+
+              <div>
+                <div class="text-sm text-slate-200">{{ run.name }}</div>
+                <div class="text-xs text-slate-500"
+                     data-localtime="{{ run.created_at.isoformat() }}">
+                  {{ run.created_at.strftime('%b %d, %Y at %H:%M') }}
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <!-- Agents selected -->
+              <span class="text-xs text-slate-500">
+                Agents {{ run.agents_selected | join(', ') }}
+              </span>
+              <!-- Status label -->
+              <span class="text-xs font-medium
+                {% if run.status.value == 'complete' %}text-emerald-400
+                {% elif run.status.value == 'running' %}text-blue-400
+                {% elif run.status.value == 'paused' %}text-yellow-400
+                {% elif run.status.value == 'failed' %}text-red-400
+                {% else %}text-slate-500{% endif %}">
+                {{ run.status.value | capitalize }}
+              </span>
+            </div>
+
+          </div>
+          {% endfor %}
+        </div>
+
+      {% else %}
+        <div class="text-center py-8">
+          <p class="text-sm text-slate-500 mb-3">No runs yet.</p>
+          {% if project.chapter_count %}
+          <a href="/projects/{{ project.id }}/runs/new"
+             class="text-sm text-amber-400 hover:text-amber-300 transition-colors">
+            Configure and start your first run →
+          </a>
+          {% else %}
+          <p class="text-xs text-slate-600">Upload a manuscript first.</p>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- ── Right column (1/3 width) ─────────────────────────────── -->
+  <div class="space-y-6">
+
+    <!-- Output profiles -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">
+        Output Profiles
+      </h2>
+
+      {% if profiles %}
+        <div class="space-y-2">
+          {% for profile in profiles %}
+          <div class="p-3 bg-slate-800/60 border border-slate-700/50 rounded-lg">
+            <div class="flex items-start justify-between">
+              <div class="text-sm text-slate-200 leading-snug">{{ profile.name }}</div>
+              {% if profile.is_default %}
+              <span class="text-xs text-amber-400 ml-2 flex-shrink-0">default</span>
+              {% endif %}
+            </div>
+            <div class="text-xs text-slate-500 mt-1">
+              {{ profile.trim_width_inches }}" × {{ profile.trim_height_inches }}"
+              · {{ profile.dpi }} DPI
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <a href="/projects/{{ project.id }}/profiles/new"
+           class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300
+                  mt-3 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Add profile
+        </a>
+      {% else %}
+        <p class="text-xs text-slate-500">No profiles configured.</p>
+      {% endif %}
+    </div>
+
+    <!-- Project info -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">
+        Info
+      </h2>
+      <dl class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Created</dt>
+          <dd class="text-slate-300"
+              data-localtime="{{ project.created_at.isoformat() }}"
+              data-localtime-format="date">{{ project.created_at.strftime('%b %d, %Y') }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Chapters</dt>
+          <dd class="text-slate-300">{{ project.chapter_count or '—' }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Runs</dt>
+          <dd class="text-slate-300">{{ runs | length }}</dd>
+        </div>
+        <div class="flex justify-between items-center pt-1 border-t border-slate-800">
+          <dt class="text-slate-500">Layout mode</dt>
+          <dd>
+            <select id="layout-mode-select"
+                    onchange="setLayoutMode(this.value)"
+                    class="text-xs bg-slate-800 text-slate-300 border border-slate-700
+                           rounded px-2 py-1 cursor-pointer hover:border-slate-500
+                           focus:outline-none focus:border-amber-500 transition-colors">
+              <option value="novel"   {% if project.layout_mode == 'novel' %}selected{% endif %}>Novel</option>
+              <option value="poetry"  {% if project.layout_mode == 'poetry' %}selected{% endif %}>Poetry</option>
+              <option value="essays"  {% if project.layout_mode == 'essays' %}selected{% endif %}>Essays</option>
+            </select>
+          </dd>
+        </div>
+      </dl>
+
+      {% if project.description %}
+      <div class="mt-3 pt-3 border-t border-slate-800">
+        <p class="text-xs text-slate-500 leading-relaxed">{{ project.description }}</p>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  /* SortableJS ghost/drag states — can't use Tailwind CDN for dynamically-added classes */
+  .sortable-ghost  { opacity: 0.35; background: #1e293b !important; border-color: #475569 !important; }
+  .sortable-chosen { outline: 1px solid #f59e0b; border-radius: 0.5rem; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script>
+  // ── Chapter drag-and-drop ─────────────────────────────────────────────────
+  var listEl = document.getElementById('chapter-list');
+  if (listEl) {
+    Sortable.create(listEl, {
+      animation:   150,
+      chosenClass: 'sortable-chosen',
+      onEnd: function () {
+        // Renumber position badges after every drag
+        listEl.querySelectorAll('.chapter-pos').forEach(function (el, i) {
+          el.textContent = i + 1;
+        });
+        document.getElementById('save-order-btn').classList.remove('hidden');
+        var st = document.getElementById('order-status');
+        if (st) { st.textContent = 'Unsaved changes'; st.className = 'text-xs text-amber-500 mt-2 text-right'; }
+      }
+    });
+  }
+
+  function saveOrder() {
+    var order = [];
+    document.querySelectorAll('#chapter-list .chapter-item').forEach(function (el) {
+      order.push(el.getAttribute('data-filename'));
+    });
+    fetch('/projects/{{ project.id }}/reorder', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ order: order })
+    }).then(function (r) {
+      if (r.ok) {
+        document.getElementById('save-order-btn').classList.add('hidden');
+        var st = document.getElementById('order-status');
+        if (st) { st.textContent = 'Order saved ✓'; st.className = 'text-xs text-emerald-500 mt-2 text-right'; }
+      }
+    });
+  }
+
+  // ── Layout mode selector ──────────────────────────────────────────────────
+  function setLayoutMode(mode) {
+    var form = new FormData();
+    form.append('layout_mode', mode);
+    fetch('/projects/{{ project.id }}/layout-mode', { method: 'POST', body: form })
+      .then(function (r) {
+        if (!r.ok) { alert('Failed to save layout mode.'); }
+      });
+  }
+</script>
+{% endblock %}

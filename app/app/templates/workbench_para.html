@@ -1,0 +1,268 @@
+{#
+  PARAGRAPH BLOCK — used in:
+    - workbench_chapter.html (via {% include %})
+    - workbench_paralist.html (via {% include %})
+    - Returned directly from the /paragraph/{index} edit POST (outerHTML swap)
+
+  Context: project, chapter_key, para ({"index": N, "text": "..."})
+#}
+
+<div id="para-{{ para.index }}"
+     class="group relative bg-slate-800/60 border border-slate-700/60 rounded-xl p-5 mb-3
+            hover:border-slate-600 transition-colors">
+
+  {# ── Header row: paragraph number + toolbar ── #}
+  <div class="flex items-start justify-between mb-3">
+    <span class="text-xs font-mono text-slate-600 mt-0.5 select-none">¶ {{ para.index + 1 }}</span>
+
+    <div id="para-toolbar-{{ para.index }}"
+         class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap justify-end">
+
+      {# ── Manual edit controls ── #}
+
+      {# Edit button #}
+      <button
+        onclick="editMode({{ para.index }})"
+        class="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-400
+               hover:text-slate-200 border border-slate-600
+               transition-colors cursor-pointer"
+        title="Edit this paragraph directly"
+      >
+        ✏️ Edit
+      </button>
+
+      {# Insert After button #}
+      <button
+        onclick="insertMode({{ para.index }})"
+        class="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-400
+               hover:text-slate-200 border border-slate-600
+               transition-colors cursor-pointer"
+        title="Insert a new paragraph after this one"
+      >
+        ➕ After
+      </button>
+
+      {# Delete button #}
+      <button
+        hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/paragraph/{{ para.index }}"
+        hx-vals='{"action": "delete"}'
+        hx-target="#paragraphs-list"
+        hx-swap="innerHTML"
+        hx-confirm="Delete this paragraph? This action will be saved to your working copy."
+        class="text-xs px-2 py-1 rounded bg-red-900/20 hover:bg-red-900/50 text-red-500
+               hover:text-red-300 border border-red-900/40 hover:border-red-700/60
+               transition-colors cursor-pointer"
+        title="Delete this paragraph"
+      >
+        🗑
+      </button>
+
+      {# Divider between manual and AI controls #}
+      <span class="text-slate-700 mx-0.5 select-none">|</span>
+
+      {# ── AI operation buttons ── #}
+
+      {# Expand #}
+      <button
+        hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/paragraph/{{ para.index }}/ai"
+        hx-vals='{"operation": "expand"}'
+        hx-target="#para-{{ para.index }}"
+        hx-swap="outerHTML"
+        hx-indicator="#ai-spinner-{{ para.index }}"
+        class="text-xs px-2 py-1 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-400
+               hover:text-amber-200 border border-amber-800/50 hover:border-amber-600
+               transition-colors cursor-pointer"
+        title="Ask AI to expand this paragraph with more detail"
+      >
+        📝 Expand
+      </button>
+
+      {# Rephrase #}
+      <button
+        hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/paragraph/{{ para.index }}/ai"
+        hx-vals='{"operation": "rephrase"}'
+        hx-target="#para-{{ para.index }}"
+        hx-swap="outerHTML"
+        hx-indicator="#ai-spinner-{{ para.index }}"
+        class="text-xs px-2 py-1 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-400
+               hover:text-amber-200 border border-amber-800/50 hover:border-amber-600
+               transition-colors cursor-pointer"
+        title="Ask AI to rephrase this paragraph (same meaning, fresh wording)"
+      >
+        🔄 Rephrase
+      </button>
+
+      {# Rewrite (directed — opens prompt input) #}
+      <button
+        onclick="rewriteMode({{ para.index }})"
+        class="text-xs px-2 py-1 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-400
+               hover:text-amber-200 border border-amber-800/50 hover:border-amber-600
+               transition-colors cursor-pointer"
+        title="Ask AI to rewrite this paragraph — you can give it direction"
+      >
+        ✍️ Rewrite
+      </button>
+
+      {# Spinner — visible while AI request is in flight #}
+      <span id="ai-spinner-{{ para.index }}"
+            class="htmx-indicator text-xs text-amber-400 ml-1">
+        ⏳ Thinking…
+      </span>
+
+    </div>
+  </div>
+
+  {# ── Display mode ── #}
+  <div id="para-text-{{ para.index }}"
+       class="text-base leading-relaxed font-serif text-slate-200 whitespace-pre-wrap">
+    {{ para.text }}
+  </div>
+
+  {# ── Edit mode (hidden until editMode() is called) ── #}
+  <div id="para-edit-{{ para.index }}" class="hidden">
+    <form
+      hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/paragraph/{{ para.index }}"
+      hx-target="#para-{{ para.index }}"
+      hx-swap="outerHTML"
+      class="space-y-2"
+    >
+      <input type="hidden" name="action" value="edit">
+      <textarea
+        id="para-textarea-{{ para.index }}"
+        name="text"
+        rows="6"
+        class="w-full bg-slate-900 border border-amber-500/50 rounded-lg p-3
+               text-base leading-relaxed font-serif text-slate-200 resize-y
+               focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20
+               min-h-[6rem]"
+      >{{ para.text }}</textarea>
+      <div class="flex items-center gap-2">
+        <button
+          type="submit"
+          class="text-xs px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400
+                 text-slate-950 font-semibold transition-colors cursor-pointer"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onclick="cancelEdit({{ para.index }})"
+          class="text-xs px-4 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600
+                 text-slate-300 transition-colors cursor-pointer"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {# ── Directed rewrite form (hidden until rewriteMode() is called) ── #}
+  <div id="para-rewrite-{{ para.index }}" class="hidden mt-4 pt-4 border-t border-amber-700/30">
+    <div class="text-xs text-amber-400 mb-2 font-medium">✍️ Directed Rewrite</div>
+    <form
+      hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/paragraph/{{ para.index }}/ai"
+      hx-target="#para-{{ para.index }}"
+      hx-swap="outerHTML"
+      hx-indicator="#ai-spinner-{{ para.index }}"
+      class="space-y-2"
+    >
+      <input type="hidden" name="operation" value="rewrite">
+      <input
+        name="direction"
+        type="text"
+        placeholder="How should it be rewritten? e.g. 'add more tension' or 'include snakes' (leave blank for general rewrite)"
+        class="w-full bg-slate-900 border border-amber-500/40 rounded-lg px-3 py-2
+               text-sm text-slate-200 placeholder-slate-600
+               focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20"
+      >
+      <div class="flex items-center gap-2">
+        <button
+          type="submit"
+          class="text-xs px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400
+                 text-slate-950 font-semibold transition-colors cursor-pointer"
+        >
+          ✍️ Rewrite
+        </button>
+        <button
+          type="button"
+          onclick="cancelRewrite({{ para.index }})"
+          class="text-xs px-4 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600
+                 text-slate-300 transition-colors cursor-pointer"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {# ── Insert-after form (hidden until insertMode() is called) ── #}
+  <div id="para-insert-{{ para.index }}" class="hidden mt-4 pt-4 border-t border-slate-700/60">
+    <div class="text-xs text-slate-500 mb-2 font-medium">New paragraph (inserted after this one)</div>
+    <form
+      hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/paragraph/{{ para.index }}"
+      hx-target="#paragraphs-list"
+      hx-swap="innerHTML"
+      class="space-y-2"
+    >
+      <input type="hidden" name="action" value="insert_after">
+      <textarea
+        id="para-insert-text-{{ para.index }}"
+        name="text"
+        rows="4"
+        placeholder="Type the new paragraph here, or use AI Generate below…"
+        class="w-full bg-slate-900 border border-emerald-500/40 rounded-lg p-3
+               text-base leading-relaxed font-serif text-slate-200 resize-y
+               focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20
+               min-h-[5rem]"
+      ></textarea>
+      <div class="flex items-center gap-2">
+        <button
+          type="submit"
+          class="text-xs px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600
+                 text-white font-semibold transition-colors cursor-pointer"
+        >
+          Insert
+        </button>
+        <button
+          type="button"
+          onclick="cancelInsert({{ para.index }})"
+          class="text-xs px-4 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600
+                 text-slate-300 transition-colors cursor-pointer"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+
+    {# AI Generate option for insert #}
+    <div class="mt-3 pt-3 border-t border-slate-700/40">
+      <div class="text-xs text-amber-400 mb-2 font-medium">✨ Or let AI generate it</div>
+      <form
+        hx-post="/projects/{{ project.id }}/workbench/chapter/{{ chapter_key }}/paragraph/{{ para.index }}/ai"
+        hx-target="#para-{{ para.index }}"
+        hx-swap="outerHTML"
+        hx-indicator="#ai-spinner-{{ para.index }}"
+        class="flex items-center gap-2"
+      >
+        <input type="hidden" name="operation" value="generate_after">
+        <input
+          name="direction"
+          type="text"
+          placeholder="What should the new paragraph be about? e.g. 'snakes attack the flock'"
+          required
+          class="flex-1 bg-slate-900 border border-amber-500/40 rounded-lg px-3 py-2
+                 text-sm text-slate-200 placeholder-slate-600
+                 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20"
+        >
+        <button
+          type="submit"
+          class="text-xs px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400
+                 text-slate-950 font-semibold transition-colors cursor-pointer whitespace-nowrap"
+        >
+          ✨ AI Generate
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>

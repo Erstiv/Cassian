@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% set active_page = "world_rules" %}
+
+{% block title %}World Rules — {{ project.name }} — Cassian{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+      <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+      <span>›</span>
+      <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+      <span>›</span>
+      <span class="text-slate-400">World Rules</span>
+    </div>
+    <h1 class="font-serif text-2xl text-slate-100">World Rules</h1>
+    <p class="text-sm text-slate-500 mt-0.5">
+      The living reference bible for <em>{{ project.name }}</em> — {{ total }} rule{{ 's' if total != 1 else '' }}
+    </p>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <!-- Genre defaults button -->
+    <button onclick="loadGenreDefaults()"
+            class="text-xs text-violet-400 hover:text-violet-300 border border-violet-800/50
+                   hover:border-violet-700 px-3 py-1.5 rounded-lg transition-colors"
+            title="Pre-fill rules based on your project's genre ({{ project.genre or 'fiction' }})">
+      Load {{ project.genre or 'fiction' }} defaults
+    </button>
+
+    <!-- Export button -->
+    <a href="/projects/{{ project.id }}/world-rules/export"
+       class="text-xs text-slate-400 hover:text-slate-300 border border-slate-700
+              hover:border-slate-600 px-3 py-1.5 rounded-lg transition-colors"
+       title="Download all rules as a JSON file for backup or cross-project use">
+      Export JSON
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-3 gap-6">
+
+  <!-- ── Left column: Rules by category (2/3 width) ────────────── -->
+  <div class="col-span-2 space-y-6">
+
+    {% for cat in categories %}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-base">{{ cat.icon }}</span>
+          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+            {{ cat.label }}
+          </h2>
+          <span class="text-xs text-slate-600">({{ grouped[cat.key] | length }})</span>
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-600 mb-3">{{ cat.desc }}</p>
+
+      <!-- Existing rules -->
+      <div id="rules-{{ cat.key }}" class="space-y-2 mb-3">
+        {% for rule in grouped[cat.key] %}
+        <div id="rule-{{ rule.id }}" class="p-4 bg-slate-800/60 border border-slate-700/50 rounded-lg group">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="text-sm font-medium text-slate-200 truncate">{{ rule.title }}</h3>
+                {% if rule.source == 'genre_default' %}
+                  <span class="text-xs text-violet-400 bg-violet-900/30 px-2 py-0.5 rounded">Genre default</span>
+                {% elif rule.source == 'consistency_editor' %}
+                  <span class="text-xs text-teal-400 bg-teal-900/30 px-2 py-0.5 rounded">Auto-detected</span>
+                {% elif rule.source == 'intake' %}
+                  <span class="text-xs text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded">From intake scan</span>
+                {% endif %}
+              </div>
+              <p class="text-xs text-slate-400 leading-relaxed">{{ rule.content }}</p>
+            </div>
+            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              <button hx-delete="/projects/{{ project.id }}/world-rules/{{ rule.id }}"
+                      hx-target="#rule-{{ rule.id }}" hx-swap="outerHTML"
+                      hx-confirm="Delete this rule?"
+                      class="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded
+                             hover:bg-red-900/30 transition-colors">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Add new rule (inline form) -->
+      <form hx-post="/projects/{{ project.id }}/world-rules"
+            hx-target="#rules-{{ cat.key }}"
+            hx-swap="beforeend"
+            hx-on::after-request="this.reset()"
+            class="flex flex-col gap-2 p-3 bg-slate-800/30 border border-dashed border-slate-700/50 rounded-lg">
+        <input type="hidden" name="category" value="{{ cat.key }}">
+        <input type="text" name="title" placeholder="Rule title (e.g. 'Daniil Tsarasov')"
+               required
+               class="w-full text-sm bg-slate-800 text-slate-200 border border-slate-700
+                      rounded px-3 py-1.5 placeholder:text-slate-600
+                      focus:outline-none focus:border-amber-500 transition-colors">
+        <textarea name="content" placeholder="Description — what every agent needs to know about this"
+                  required rows="2"
+                  class="w-full text-xs bg-slate-800 text-slate-300 border border-slate-700
+                         rounded px-3 py-1.5 placeholder:text-slate-600 resize-y
+                         focus:outline-none focus:border-amber-500 transition-colors"></textarea>
+        <div class="flex justify-end">
+          <button type="submit"
+                  class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200
+                         px-3 py-1.5 rounded-lg transition-colors">
+            Add Rule
+          </button>
+        </div>
+      </form>
+    </div>
+    {% endfor %}
+
+  </div>
+
+  <!-- ── Right column: Quick info ──────────────────────────────── -->
+  <div class="space-y-6">
+
+    <!-- How it works -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">
+        How World Rules Work
+      </h2>
+      <div class="space-y-3 text-xs text-slate-500 leading-relaxed">
+        <p>World Rules are the facts, constraints, and decisions that define your project. Every agent reads them before making changes.</p>
+        <p><strong class="text-slate-400">Characters:</strong> Names, ages, traits, relationships — anything an editor needs to get right.</p>
+        <p><strong class="text-slate-400">Rules:</strong> Physical laws, magic systems, dietary constraints — things that must not be contradicted.</p>
+        <p><strong class="text-slate-400">Style Decisions:</strong> POV, tense, tone — choices you've locked in that agents should respect.</p>
+        <p><strong class="text-slate-400">Genre Defaults:</strong> Click "Load defaults" to pre-fill rules based on your project type.</p>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">
+        Summary
+      </h2>
+      <dl class="space-y-2 text-sm">
+        {% for cat in categories %}
+        {% if grouped[cat.key] | length > 0 %}
+        <div class="flex justify-between">
+          <dt class="text-slate-500">{{ cat.icon }} {{ cat.label }}</dt>
+          <dd class="text-slate-300">{{ grouped[cat.key] | length }}</dd>
+        </div>
+        {% endif %}
+        {% endfor %}
+        <div class="flex justify-between pt-2 border-t border-slate-800">
+          <dt class="text-slate-400 font-medium">Total</dt>
+          <dd class="text-amber-400 font-medium">{{ total }}</dd>
+        </div>
+      </dl>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function loadGenreDefaults() {
+    fetch('/projects/{{ project.id }}/world-rules/genre-defaults', { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.added > 0) {
+          window.location.reload();
+        } else {
+          alert('All genre defaults are already loaded.');
+        }
+      });
+  }
+</script>
+{% endblock %}

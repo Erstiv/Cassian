@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────────────────
+#  One Thousand Perfect Sighs — Book Pipeline
+#  Python dependencies
+#  Install with:  pip install -r requirements.txt
+# ─────────────────────────────────────────────────────────────
+
+# Reading and writing .docx files
+python-docx==1.1.2
+
+# Image handling (extracting and processing embedded images)
+Pillow==10.3.0
+
+# Google Gemini AI (consistency, editing, illustration prompts, QC)
+# Note: google-generativeai is deprecated — use google-genai instead
+google-genai
+
+# PDF generation for final print-ready output
+weasyprint==62.3
+
+# Professional print-ready PDF layout (Agent 5 — Layout)
+# Provides precise typesetting, page templates, and font embedding
+reportlab>=4.0
+
+# Progress bars (so you can see what's happening while agents run)
+tqdm==4.66.4
+
+# Colour output in the terminal (makes logs easier to read)
+colorama==0.4.6

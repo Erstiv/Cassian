@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Draft Writer — {{ project.name }} — Cassian{% endblock %}
+
+{% block page_header %}
+<div class="bg-slate-900 border-b border-slate-800 px-8 py-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold text-white flex items-center gap-3">
+        <span class="text-amber-400">✍️</span> Draft Writer
+      </h1>
+      <p class="text-sm text-slate-400 mt-1">Generate chapter prose from your framework outline</p>
+    </div>
+    <div class="text-right">
+      <div class="text-xs text-slate-500">{{ project.name }}</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# Flash message (from bulk actions) #}
+{% if flash_msg is defined and flash_msg %}
+<div class="mb-6 bg-emerald-900/30 border border-emerald-700/50 rounded-xl px-5 py-3 text-emerald-300 text-sm flex items-center gap-2"
+     id="flash-msg">
+  {{ flash_msg }}
+  <button onclick="document.getElementById('flash-msg').remove()" class="ml-auto text-emerald-500 hover:text-emerald-300">&times;</button>
+</div>
+{% endif %}
+
+{% if not framework %}
+  {# No framework yet #}
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
+    <div class="text-4xl mb-4">🏗</div>
+    <h2 class="text-lg font-semibold text-white mb-2">No Framework Found</h2>
+    <p class="text-slate-400 text-sm mb-6">
+      Generate a Framework first before writing drafts. The framework provides the chapter outline
+      that Draft Writer uses to generate prose.
+    </p>
+    <a href="/projects/{{ project.id }}/framework"
+       class="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400
+              text-slate-950 font-semibold rounded-lg transition-colors text-sm">
+      🏗 Go to Framework
+    </a>
+  </div>
+
+{% else %}
+
+  {# No brainstorm warning #}
+  {% if not brainstorm %}
+  <div class="mb-6 bg-amber-900/20 border border-amber-700/40 rounded-xl px-5 py-3 text-amber-300 text-sm">
+    💡 <strong>Tip:</strong> No brainstorm found. Drafts will still generate from framework data, but
+    <a href="/projects/{{ project.id }}/idea" class="underline hover:text-amber-200">generating a brainstorm first</a>
+    will produce richer, more detailed prose.
+  </div>
+  {% endif %}
+
+  {# Stats bar #}
+  {% include "fragments/draft_stats_bar.html" %}
+
+  {# Bulk actions #}
+  <div class="flex gap-3 mb-6">
+    {% set remaining = stats.total - stats.generated %}
+    {% set unapproved = stats.generated - stats.approved %}
+
+    {% if remaining > 0 %}
+    <button hx-post="/projects/{{ project.id }}/draft-writer/generate-all"
+            hx-target="#generate-all-progress"
+            hx-swap="innerHTML"
+            hx-indicator="#generate-all-spinner"
+            hx-confirm="This will generate {{ remaining }} chapter(s). This may take several minutes. Continue?"
+            id="generate-all-btn"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold rounded-lg text-sm transition-colors">
+      ✨ Generate All Remaining ({{ remaining }})
+    </button>
+    <span id="generate-all-spinner" class="htmx-indicator inline-flex items-center gap-2 ml-2">
+      <svg class="animate-spin h-5 w-5 text-amber-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <span class="text-xs text-slate-400">Generating chapters… this may take a few minutes</span>
+    </span>
+    {% endif %}
+
+    {% if unapproved > 0 %}
+    <form method="post" action="/projects/{{ project.id }}/draft-writer/approve-all"
+          onsubmit="return confirm('This will approve {{ unapproved }} draft(s) and save them to the ingested pipeline. Continue?');"
+          class="inline">
+      <button type="submit"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors">
+        ✓ Approve All Drafts ({{ unapproved }})
+      </button>
+    </form>
+    {% endif %}
+  </div>
+
+  {# Generate-all progress panel #}
+  <div id="generate-all-progress" class="mb-6"></div>
+
+  {# Preview panel (populated via HTMX — above grid so it's immediately visible) #}
+  <div id="draft-preview-panel" class="mb-6"></div>
+
+  {# Chapter cards grid #}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" id="chapters-grid">
+    {% for ch in chapters %}
+      {% include "fragments/draft_chapter_card.html" %}
+    {% endfor %}
+  </div>
+
+{% endif %}
+
+{% endblock %}

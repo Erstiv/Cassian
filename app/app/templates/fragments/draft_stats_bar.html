@@ -1,0 +1,23 @@
+{# Fragment: Draft Writer stats bar (used for OOB swaps) #}
+{# Variables: stats (dict with total, generated, approved, total_words) #}
+{# When oob is set, this replaces the stats bar without a full page reload #}
+
+<div id="draft-stats-bar" class="grid grid-cols-4 gap-4 mb-6"
+     {% if oob is defined and oob %}hx-swap-oob="true"{% endif %}>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+    <div class="text-2xl font-semibold text-white">{{ stats.total }}</div>
+    <div class="text-xs text-slate-500 mt-1">Total Chapters</div>
+  </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+    <div class="text-2xl font-semibold text-amber-400">{{ stats.generated }}</div>
+    <div class="text-xs text-slate-500 mt-1">Generated</div>
+  </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+    <div class="text-2xl font-semibold text-emerald-400">{{ stats.approved }}</div>
+    <div class="text-xs text-slate-500 mt-1">Approved</div>
+  </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+    <div class="text-2xl font-semibold text-slate-300">{{ "{:,}".format(stats.total_words) }}</div>
+    <div class="text-xs text-slate-500 mt-1">Total Words</div>
+  </div>
+</div>

@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Workbench — {{ project.name }}{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5">
+  <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+    <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+    <span>›</span>
+    <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+    <span>›</span>
+    <span class="text-slate-400">Workbench</span>
+  </div>
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-semibold text-slate-100">🛠 Workbench</h1>
+      <p class="text-sm text-slate-500 mt-1">
+        Select a chapter, then click any paragraph to edit, insert, or delete.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if not chapters %}
+{# ── Empty state: no chapters ingested yet ── #}
+<div class="flex flex-col items-center justify-center py-32 text-center">
+  <div class="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-4">
+    <svg class="w-7 h-7 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+  </div>
+  <p class="text-slate-300 font-medium mb-1">No chapters found</p>
+  <p class="text-slate-500 text-sm">Run the Intake agent first to ingest your manuscript.</p>
+  <a href="/projects/{{ project.id }}"
+     class="mt-6 text-sm text-amber-500 hover:text-amber-400 transition-colors">
+    ← Go to project
+  </a>
+</div>
+
+{% else %}
+
+{# ── Two-panel layout ── #}
+<div class="flex gap-6 min-h-0" style="height: calc(100vh - 160px);">
+
+  {# ── Left panel: chapter list ── #}
+  <div class="w-64 flex-shrink-0 bg-slate-900 border border-slate-800 rounded-2xl overflow-y-auto">
+    <div class="px-4 py-3 border-b border-slate-800">
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Chapters</div>
+    </div>
+    <nav class="p-2 space-y-0.5" id="chapter-nav">
+      {% for ch in chapters %}
+      <a
+        hx-get="/projects/{{ project.id }}/workbench/chapter/{{ ch.chapter_key }}"
+        hx-target="#editor-panel"
+        hx-swap="innerHTML"
+        hx-on::after-request="setActiveChapter(this)"
+        href="#"
+        class="workbench-chapter-link flex items-start justify-between gap-2 px-3 py-2.5 rounded-lg
+               text-xs cursor-pointer transition-colors
+               text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+        data-chapter-key="{{ ch.chapter_key }}"
+      >
+        <div class="min-w-0">
+          <div class="font-medium text-slate-300 truncate leading-snug">{{ ch.title }}</div>
+          <div class="text-slate-600 mt-0.5">{{ ch.paragraph_count }} paragraphs</div>
+        </div>
+        {% if ch.has_working_copy %}
+        <span class="flex-shrink-0 mt-0.5 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-400/30"
+              title="Has unsaved changes"></span>
+        {% endif %}
+      </a>
+      {% endfor %}
+    </nav>
+  </div>
+
+  {# ── Right panel: editor ── #}
+  <div class="flex-1 min-w-0 bg-slate-900 border border-slate-800 rounded-2xl overflow-y-auto" id="editor-panel">
+    <div class="flex flex-col items-center justify-center h-full py-20 text-center">
+      <div class="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center mb-4">
+        <span class="text-2xl">📝</span>
+      </div>
+      <p class="text-slate-400 font-medium">Select a chapter to begin editing</p>
+      <p class="text-slate-600 text-sm mt-1">Click any chapter in the list on the left</p>
+    </div>
+  </div>
+
+</div>
+
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Highlight the active chapter in the sidebar
+  function setActiveChapter(el) {
+    document.querySelectorAll('.workbench-chapter-link').forEach(function(a) {
+      a.classList.remove('bg-slate-800', 'text-amber-400', 'border-l-2', 'border-amber-400');
+      a.classList.add('text-slate-400');
+    });
+    el.classList.remove('text-slate-400');
+    el.classList.add('bg-slate-800', 'text-amber-400');
+  }
+
+  // Toggle a paragraph into inline edit mode
+  function editMode(index) {
+    var textEl  = document.getElementById('para-text-' + index);
+    var editEl  = document.getElementById('para-edit-' + index);
+    var toolbar = document.getElementById('para-toolbar-' + index);
+    if (textEl)  textEl.classList.add('hidden');
+    if (editEl)  editEl.classList.remove('hidden');
+    if (toolbar) toolbar.classList.add('hidden');
+    var ta = document.getElementById('para-textarea-' + index);
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  }
+
+  function cancelEdit(index) {
+    var textEl  = document.getElementById('para-text-' + index);
+    var editEl  = document.getElementById('para-edit-' + index);
+    var toolbar = document.getElementById('para-toolbar-' + index);
+    if (textEl)  textEl.classList.remove('hidden');
+    if (editEl)  editEl.classList.add('hidden');
+    if (toolbar) toolbar.classList.remove('hidden');
+  }
+
+  // Toggle insert-after form
+  function insertMode(index) {
+    var insertEl = document.getElementById('para-insert-' + index);
+    if (insertEl) {
+      insertEl.classList.remove('hidden');
+      var ta = insertEl.querySelector('textarea');
+      if (ta) ta.focus();
+    }
+  }
+
+  function cancelInsert(index) {
+    var insertEl = document.getElementById('para-insert-' + index);
+    if (insertEl) insertEl.classList.add('hidden');
+  }
+
+  // Toggle directed rewrite form
+  function rewriteMode(index) {
+    var rewriteEl = document.getElementById('para-rewrite-' + index);
+    if (rewriteEl) {
+      rewriteEl.classList.remove('hidden');
+      var inp = rewriteEl.querySelector('input[name="direction"]');
+      if (inp) inp.focus();
+    }
+  }
+
+  function cancelRewrite(index) {
+    var rewriteEl = document.getElementById('para-rewrite-' + index);
+    if (rewriteEl) rewriteEl.classList.add('hidden');
+  }
+
+  // After HTMX swaps the paragraph list (insert/delete), re-process any htmx attributes
+  document.body.addEventListener('htmx:afterSwap', function(evt) {
+    // Nothing extra needed — HTMX handles re-processing swapped content automatically
+  });
+</script>
+{% endblock %}

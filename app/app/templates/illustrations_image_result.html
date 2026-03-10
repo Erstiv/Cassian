@@ -1,0 +1,201 @@
+{#
+  illustrations_image_result.html
+  Generated image + approval controls.
+  Swapped into #image-result-panel via HTMX.
+  Also used inline from illustrations_chapter_detail.html when an image already exists.
+
+  Context:
+    project       — Project
+    chapter       — Chapter
+    illustration  — Illustration (with raw_image_path populated)
+#}
+
+{% set ch_key     = chapter.chapter_key %}
+{% set ill_status = illustration.status.value if illustration else 'not_started' %}
+{% set img_url    = illustration.raw_image_path if illustration else None %}
+{% set attempts   = illustration.attempts if illustration else 0 %}
+
+<div class="flex flex-col gap-4 htmx-added">
+
+  {# ── Model badge ── #}
+  {% if model_used %}
+  <div class="flex items-center gap-2">
+    <span class="text-xs px-2 py-0.5 rounded-full border border-slate-700 text-slate-500">
+      Generated with {{ model_used }}
+    </span>
+    {% if attempts %}<span class="text-xs text-slate-600">· attempt {{ attempts }}</span>{% endif %}
+  </div>
+  {% endif %}
+
+  {# ── Generated image ── #}
+  {% if img_url %}
+  <div class="relative rounded-xl overflow-hidden border border-slate-700/60 shadow-xl bg-slate-800">
+    <img src="{{ img_url }}"
+         alt="Generated illustration for {{ chapter.title or ch_key }}"
+         data-full-src="{{ img_url }}"
+         data-caption="Chapter {{ ch_key }} — {{ (chapter.title or '') | e }}"
+         class="lightbox-trigger w-full object-contain max-h-[420px] cursor-zoom-in" />
+
+    {# Status overlay badge #}
+    {% if ill_status == 'approved' %}
+    <div class="absolute top-3 right-3">
+      <span class="px-2.5 py-1 rounded-full text-xs font-semibold
+                   bg-green-400/90 text-slate-900 shadow">
+        ✓ Approved
+      </span>
+    </div>
+    {% elif ill_status == 'rejected' %}
+    <div class="absolute top-3 right-3">
+      <span class="px-2.5 py-1 rounded-full text-xs font-semibold
+                   bg-red-500/90 text-white shadow">
+        ✗ Rejected
+      </span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# ── Attempt counter ── #}
+  {% if attempts %}
+  <div class="text-xs text-slate-600 text-center">
+    Attempt {{ attempts }}
+  </div>
+  {% endif %}
+
+  {# ── Approval controls ── #}
+  {% if ill_status == 'approved' %}
+    {# ─ Approved state ─ #}
+    <div class="flex flex-col items-center gap-3 py-4 text-center">
+      <div class="text-green-400 font-medium text-sm">Illustration approved ✓</div>
+      {% if illustration.final_path %}
+      <div class="text-xs text-slate-500">CMYK TIFF saved for print</div>
+      {% endif %}
+      <button
+        hx-post="/projects/{{ project.id }}/illustrations/chapter/{{ ch_key }}/regenerate"
+        hx-target="#image-result-panel"
+        hx-swap="innerHTML"
+        hx-indicator="#regen-approved-spinner"
+        hx-include="#model-tier"
+        hx-confirm="Regenerate will replace this approved illustration. Continue?"
+        class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+               border border-slate-700 text-slate-500
+               hover:border-amber-400/50 hover:text-amber-400 transition-colors cursor-pointer">
+        🔄 Regenerate anyway
+        <svg id="regen-approved-spinner" class="htmx-indicator w-3 h-3 animate-spin"
+             fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+      </button>
+    </div>
+
+  {% elif ill_status in ('generated', 'pending', 'regenerating', 'not_started') %}
+    {# ─ Review controls ─ #}
+
+    {# Approve button #}
+    <button
+      hx-post="/projects/{{ project.id }}/illustrations/chapter/{{ ch_key }}/approve"
+      hx-target="#image-result-panel"
+      hx-swap="innerHTML"
+      hx-indicator="#approve-spinner"
+      hx-disabled-elt="this"
+      class="flex items-center justify-center gap-2 w-full text-sm px-4 py-2.5 rounded-xl
+             bg-green-600 text-white font-semibold hover:bg-green-500
+             transition-colors cursor-pointer">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+      </svg>
+      Approve
+      <svg id="approve-spinner" class="htmx-indicator w-4 h-4 animate-spin"
+           fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+    </button>
+
+    {# Reject section ── optional note + reject button #}
+    <div class="border border-slate-700/50 rounded-xl p-3 bg-slate-800/30">
+      <label class="text-xs text-slate-500 block mb-2">Rejection note (optional)</label>
+      <form
+        hx-post="/projects/{{ project.id }}/illustrations/chapter/{{ ch_key }}/reject"
+        hx-target="#image-result-panel"
+        hx-swap="innerHTML"
+        hx-indicator="#reject-spinner"
+        class="flex flex-col gap-2">
+        <textarea
+          name="rejection_note"
+          rows="2"
+          placeholder="e.g. Wrong composition, character looks off, too dark…"
+          class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5
+                 text-xs text-slate-300 placeholder-slate-600 resize-none
+                 focus:outline-none focus:border-red-500/60 transition-colors"></textarea>
+        <button
+          type="submit"
+          hx-disabled-elt="this"
+          class="flex items-center justify-center gap-2 text-sm px-4 py-2 rounded-lg
+                 border border-red-600/60 text-red-400
+                 hover:bg-red-500/10 hover:border-red-500 transition-colors cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+          Reject
+          <svg id="reject-spinner" class="htmx-indicator w-3 h-3 animate-spin"
+               fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+        </button>
+      </form>
+    </div>
+
+    {# Regenerate button ── skip approval, generate another directly #}
+    <button
+      hx-post="/projects/{{ project.id }}/illustrations/chapter/{{ ch_key }}/regenerate"
+      hx-target="#image-result-panel"
+      hx-swap="innerHTML"
+      hx-indicator="#regen-inline-spinner"
+      hx-include="#model-tier"
+      hx-disabled-elt="this"
+      class="flex items-center justify-center gap-2 text-xs px-3 py-1.5 rounded-lg
+             border border-slate-700 text-slate-400
+             hover:border-amber-400/50 hover:text-amber-400 transition-colors cursor-pointer">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      Try again (different composition)
+      <svg id="regen-inline-spinner" class="htmx-indicator w-3 h-3 animate-spin"
+           fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+    </button>
+
+  {% elif ill_status == 'rejected' %}
+    {# ─ Rejected state ─ #}
+    <div class="text-center py-2">
+      <div class="text-red-400 text-sm font-medium mb-1">Illustration Rejected</div>
+      {% if illustration.rejection_note %}
+      <p class="text-xs text-slate-500 italic mb-4">{{ illustration.rejection_note }}</p>
+      {% endif %}
+      <button
+        hx-post="/projects/{{ project.id }}/illustrations/chapter/{{ ch_key }}/regenerate"
+        hx-target="#image-result-panel"
+        hx-swap="innerHTML"
+        hx-indicator="#regen-rejected-spinner"
+        hx-include="#model-tier"
+        hx-disabled-elt="this"
+        class="flex items-center justify-center gap-2 mx-auto text-sm px-5 py-2.5 rounded-xl
+               bg-amber-400 text-slate-950 font-semibold hover:bg-amber-300
+               transition-colors cursor-pointer">
+        🔄 Regenerate
+        <svg id="regen-rejected-spinner" class="htmx-indicator w-4 h-4 animate-spin"
+             fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+      </button>
+    </div>
+  {% endif %}
+
+</div>

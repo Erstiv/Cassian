@@ -1,0 +1,548 @@
+{% extends "base.html" %}
+{% set active_page = "proofread" %}
+
+{% block title %}Proofreader — {{ project.name }} — Cassian{% endblock %}
+
+{% block head %}
+<style>
+  #run-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(2, 6, 23, 0.85);
+    backdrop-filter: blur(4px);
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1.5rem;
+  }
+  #run-overlay.active {
+    display: flex;
+  }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid #334155;
+    border-top-color: #fbbf24;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Issue context: bold the flagged text */
+  .issue-context strong { color: #fbbf24; }
+
+  /* Collapsible chapter expand icon rotation */
+  .chapter-expand-icon { transition: transform 200ms ease; }
+  .chapter-card.open .chapter-expand-icon { transform: rotate(90deg); }
+</style>
+{% endblock %}
+
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+      <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+      <span>›</span>
+      <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+      <span>›</span>
+      <span class="text-slate-400">Proofreader</span>
+    </div>
+    <h1 class="font-serif text-2xl text-slate-100">Proofreader</h1>
+    <p class="text-sm text-slate-500 mt-0.5">
+      Final surface-level pass — typos, repeated words, punctuation, homophones, and continuity errors
+    </p>
+  </div>
+
+  <div class="flex items-center gap-3">
+    {# Status badge #}
+    {% if status == "complete" %}
+      <span class="text-xs bg-green-900/40 text-green-400 border border-green-700/40 px-3 py-1.5 rounded-lg">
+        ✅ Complete
+      </span>
+    {% elif status == "stale" %}
+      <span class="text-xs bg-amber-900/40 text-amber-400 border border-amber-700/40 px-3 py-1.5 rounded-lg">
+        ⚠ Stale — chapters changed since last run
+      </span>
+    {% else %}
+      <span class="text-xs bg-slate-800 text-slate-500 border border-slate-700 px-3 py-1.5 rounded-lg">
+        Not run
+      </span>
+    {% endif %}
+
+    {# Run button #}
+    <a href="/projects/{{ project.id }}/proofread/run"
+       onclick="showRunOverlay()"
+       class="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950
+              font-semibold py-2 px-4 rounded-xl transition-colors text-sm no-underline">
+      <span>🔎</span>
+      <span>{% if status == 'not_run' %}Run Proofreader{% else %}Re-run Proofreader{% endif %}</span>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── ERROR BANNER ─────────────────────────────────────────────────────────── #}
+{% if error %}
+<div class="mb-6 bg-red-900/30 border border-red-700/50 rounded-xl p-4">
+  <div class="flex items-start gap-3">
+    <span class="text-red-400 text-lg flex-shrink-0">✗</span>
+    <div>
+      <div class="text-sm font-semibold text-red-300 mb-1">Proofreader failed</div>
+      <pre class="text-xs text-red-400/80 whitespace-pre-wrap font-mono leading-relaxed">{{ error }}</pre>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  EMPTY STATE                                                                 #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{% if status == "not_run" %}
+
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center max-w-2xl mx-auto">
+  <div class="text-5xl mb-5">🔎</div>
+  <h2 class="font-serif text-xl text-slate-300 mb-2">No proofreading report yet</h2>
+  <p class="text-slate-500 text-sm mb-6">
+    The Proofreader scans every chapter for surface-level issues that editing might have missed.
+    It does not change any text — it only flags problems for your review.
+  </p>
+
+  <div class="text-left bg-slate-800/40 border border-slate-700/50 rounded-xl p-5 mb-8 text-sm">
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">For best results</div>
+    <ul class="space-y-2 text-slate-400">
+      <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">✓</span> Run after all editing (Copy &amp; Line, Dev, Consistency) is complete</li>
+      <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">✓</span> Fix any flagged issues in the Workbench, then re-run to verify</li>
+      <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5">✓</span> Dismiss issues that are intentional style choices</li>
+    </ul>
+  </div>
+
+  {# Run link with optional single-chapter #}
+  <div class="space-y-4">
+
+    {% if chapter_keys %}
+    <div class="flex items-center gap-3 justify-center text-sm">
+      <label class="flex items-center gap-2 text-slate-400 cursor-pointer">
+        <input type="checkbox" id="single-chap-check-empty"
+               onchange="toggleSingleChapterEmpty(this.checked)"
+               class="w-4 h-4 rounded bg-slate-800 border-slate-600">
+        Run on single chapter only
+      </label>
+      <select id="single-chap-select-empty"
+              class="hidden bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200
+                     px-3 py-1.5 focus:outline-none focus:border-amber-500/50">
+        {% for key in chapter_keys %}
+        <option value="{{ key }}">Chapter {{ key }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <a href="/projects/{{ project.id }}/proofread/run"
+       id="run-link-empty"
+       onclick="handleRunClick(event, '/projects/{{ project.id }}/proofread/run'); return false;"
+       class="inline-block bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold
+              py-3 px-8 rounded-xl transition-colors text-sm no-underline">
+      🔎 Run Proofreader
+    </a>
+  </div>
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  REPORT VIEW (complete or stale)                                             #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{% else %}
+
+{# ── STALE WARNING ── #}
+{% if status == "stale" %}
+<div class="mb-6 bg-amber-900/20 border border-amber-700/40 rounded-xl p-4 flex items-start gap-3">
+  <span class="text-amber-400 text-lg flex-shrink-0">⚠</span>
+  <div class="text-sm">
+    <span class="font-semibold text-amber-300">Report is stale.</span>
+    <span class="text-amber-400/80 ml-1">
+      One or more chapters have been modified since the last proofreading run.
+      Re-run the proofreader to get an up-to-date report.
+    </span>
+  </div>
+</div>
+{% endif %}
+
+{% if report %}
+
+{# ── SUMMARY BAR ────────────────────────────────────────────────────────────── #}
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+    <div>
+      <span class="text-2xl font-bold text-slate-100">{{ report.total_issues }}</span>
+      <span class="text-slate-400 text-sm ml-2">
+        issue{{ 's' if report.total_issues != 1 else '' }} across
+        {{ report.total_chapters }} chapter{{ 's' if report.total_chapters != 1 else '' }}
+      </span>
+    </div>
+
+    {# Overall rating #}
+    {% set rating = report.overall_rating %}
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-slate-500">Overall:</span>
+      {% if rating == "excellent" %}
+        <span class="text-xs font-semibold text-green-400">●●●● Excellent</span>
+      {% elif rating == "good" %}
+        <span class="text-xs font-semibold text-amber-400">●●●○ Good</span>
+      {% elif rating == "fair" %}
+        <span class="text-xs font-semibold text-orange-400">●●○○ Fair</span>
+      {% elif rating == "needs_work" %}
+        <span class="text-xs font-semibold text-red-400">●○○○ Needs Work</span>
+      {% else %}
+        <span class="text-xs text-slate-500">{{ rating }}</span>
+      {% endif %}
+
+      <span class="text-slate-600 text-xs ml-2">
+        Generated
+        <span data-localtime="{{ report.generated_at }}">
+          {{ report.generated_at[:16].replace('T', ' ') if report.generated_at else '' }}
+        </span>
+        UTC
+      </span>
+    </div>
+  </div>
+
+  {# Category breakdown #}
+  {% if report.by_category %}
+  <div class="flex flex-wrap gap-2">
+    {% set cat_styles = {
+      "typo":          "bg-red-900/30 text-red-400 border-red-700/40",
+      "repeated_word": "bg-orange-900/30 text-orange-400 border-orange-700/40",
+      "homophone":     "bg-purple-900/30 text-purple-400 border-purple-700/40",
+      "punctuation":   "bg-amber-900/30 text-amber-400 border-amber-700/40",
+      "capitalization":"bg-blue-900/30 text-blue-400 border-blue-700/40",
+      "formatting":    "bg-slate-800 text-slate-400 border-slate-700/40",
+      "continuity":    "bg-cyan-900/30 text-cyan-400 border-cyan-700/40",
+    } %}
+    {% for cat, count in report.by_category.items() | sort(attribute='1', reverse=True) %}
+    {% set style = cat_styles.get(cat, 'bg-slate-800 text-slate-400 border-slate-700') %}
+    <span class="flex items-center gap-1.5 text-xs border rounded-lg px-2.5 py-1 {{ style }}">
+      <span class="font-semibold">{{ count }}</span>
+      <span class="opacity-80">{{ cat.replace('_', ' ').title() }}</span>
+    </span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+
+
+{# ── CHAPTER LIST ────────────────────────────────────────────────────────────── #}
+<div class="space-y-2 mb-8" id="chapter-list">
+
+  {% for ch_data in chapter_issues %}
+  {% set ch_issues   = ch_data.get('issues', []) %}
+  {% set active_issues = ch_issues | selectattr('dismissed', 'undefined') | list
+     + ch_issues | selectattr('dismissed', 'equalto', false) | list %}
+  {# Simpler: count non-dismissed #}
+  {% set dismissed_count = ch_issues | selectattr('dismissed', 'equalto', true) | list | length %}
+  {% set active_count    = ch_issues | length - dismissed_count %}
+  {% set summary         = ch_data.get('summary', {}) %}
+  {% set rating          = summary.get('quality_rating', 'unknown') %}
+  {% set ch_key          = ch_data.get('chapter_key', '') %}
+
+  <div class="chapter-card bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
+       id="chapter-card-{{ ch_key }}">
+
+    {# ── Collapsed header (always visible) #}
+    <div class="flex items-center justify-between px-5 py-3.5 cursor-pointer
+                hover:bg-slate-800/50 transition-colors"
+         onclick="toggleChapter('{{ ch_key }}')"
+         id="chapter-header-{{ ch_key }}">
+
+      <div class="flex items-center gap-3 min-w-0">
+        {# Expand icon #}
+        <svg class="chapter-expand-icon w-4 h-4 text-slate-600 flex-shrink-0"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+
+        {# Chapter title #}
+        <div class="min-w-0">
+          <span class="text-sm font-medium text-slate-200">
+            Ch {{ ch_key }}:
+          </span>
+          <span class="text-sm text-slate-400 ml-1 truncate">
+            "{{ ch_data.get('title', '') }}"
+          </span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 flex-shrink-0">
+        {# Issue count or Clean badge #}
+        {% if active_count == 0 %}
+          <span class="text-xs font-semibold text-green-400 bg-green-900/30 border border-green-700/40
+                       px-2.5 py-0.5 rounded-lg">
+            ✓ Clean
+          </span>
+        {% else %}
+          <span class="text-xs text-slate-400">
+            {{ active_count }} issue{{ 's' if active_count != 1 else '' }}
+          </span>
+        {% endif %}
+
+        {# Quality rating badge #}
+        {% if rating == "excellent" %}
+          <span class="text-xs font-semibold text-green-400">●●●●</span>
+        {% elif rating == "good" %}
+          <span class="text-xs font-semibold text-amber-400">●●●○</span>
+        {% elif rating == "fair" %}
+          <span class="text-xs font-semibold text-orange-400">●●○○</span>
+        {% elif rating == "needs_work" %}
+          <span class="text-xs font-semibold text-red-400">●○○○</span>
+        {% endif %}
+        <span class="text-xs text-slate-600">{{ rating.replace('_', ' ').title() if rating else '' }}</span>
+      </div>
+
+    </div>{# end header #}
+
+    {# ── Expanded issue list (hidden by default) #}
+    <div class="chapter-body hidden border-t border-slate-800/60"
+         id="chapter-body-{{ ch_key }}">
+
+      {% if active_count == 0 and dismissed_count == 0 %}
+        <p class="px-5 py-4 text-sm text-slate-500 text-center">No issues found in this chapter.</p>
+
+      {% else %}
+        <div class="divide-y divide-slate-800/40" id="issue-list-{{ ch_key }}">
+
+          {% set cat_styles = {
+            "typo":          "text-red-400    bg-red-900/20    border-red-700/30",
+            "repeated_word": "text-orange-400 bg-orange-900/20 border-orange-700/30",
+            "homophone":     "text-purple-400 bg-purple-900/20 border-purple-700/30",
+            "punctuation":   "text-amber-400  bg-amber-900/20  border-amber-700/30",
+            "capitalization":"text-blue-400   bg-blue-900/20   border-blue-700/30",
+            "formatting":    "text-slate-400  bg-slate-800/40  border-slate-700/30",
+            "continuity":    "text-cyan-400   bg-cyan-900/20   border-cyan-700/30",
+          } %}
+
+          {% for issue in ch_issues %}
+          {% set loop_idx = loop.index0 %}
+          {% set cat      = issue.get('category', '') %}
+          {% set colors   = cat_styles.get(cat, 'text-slate-400 bg-slate-800 border-slate-700') %}
+          {% set is_dismissed = issue.get('dismissed', false) %}
+
+          <div id="issue-{{ ch_key }}-{{ loop_idx }}"
+               class="flex items-start gap-3 px-5 py-3.5 border rounded-none
+                      {{ colors }}
+                      {{ 'opacity-40 line-through' if is_dismissed else '' }}
+                      transition-opacity">
+
+            {# Category + paragraph #}
+            <div class="flex-shrink-0 text-xs font-semibold uppercase tracking-wide mt-0.5 w-36">
+              {{ cat.replace('_', ' ') }}
+              <span class="font-normal opacity-70 ml-1 not-italic no-underline">¶{{ issue.get('paragraph_index', '?') }}</span>
+            </div>
+
+            {# Context + suggestion #}
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-mono leading-relaxed break-words issue-context">
+                {{ issue.get('context', '') | replace('**', '<strong>') | safe }}
+              </div>
+              <div class="text-xs text-slate-500 mt-1 not-italic no-underline">
+                <span class="text-slate-600">→</span>
+                {{ issue.get('explanation', '') }}
+              </div>
+              {% if issue.get('suggestion') %}
+              <div class="text-xs text-slate-400 mt-0.5 not-italic no-underline">
+                <span class="text-slate-600">Fix:</span>
+                <span class="font-mono">{{ issue.get('suggestion', '') }}</span>
+              </div>
+              {% endif %}
+            </div>
+
+            {# Fix + Dismiss buttons #}
+            {% if not is_dismissed %}
+            <div class="flex flex-col gap-1 flex-shrink-0">
+              {% if issue.get('suggestion') %}
+              <button
+                hx-post="/projects/{{ project.id }}/proofread/fix/{{ ch_key }}/{{ loop_idx }}"
+                hx-target="#issue-{{ ch_key }}-{{ loop_idx }}"
+                hx-swap="outerHTML"
+                class="text-xs text-green-400 hover:text-green-300
+                       border border-green-700/50 hover:border-green-500
+                       rounded-lg px-2.5 py-0.5 transition-colors cursor-pointer">
+                Fix
+              </button>
+              {% endif %}
+              <button
+                hx-post="/projects/{{ project.id }}/proofread/dismiss/{{ ch_key }}/{{ loop_idx }}"
+                hx-target="#issue-{{ ch_key }}-{{ loop_idx }}"
+                hx-swap="outerHTML"
+                class="text-xs text-slate-600 hover:text-slate-400
+                       border border-slate-700 hover:border-slate-500
+                       rounded-lg px-2.5 py-0.5 transition-colors cursor-pointer">
+                Dismiss
+              </button>
+            </div>
+            {% elif issue.get('auto_fixed') %}
+            <span class="flex-shrink-0 text-xs text-green-400">Fixed</span>
+            {% else %}
+            <span class="flex-shrink-0 text-xs text-slate-600">Dismissed</span>
+            {% endif %}
+
+          </div>
+          {% endfor %}
+
+        </div>
+      {% endif %}
+
+    </div>{# end body #}
+  </div>{# end chapter-card #}
+  {% endfor %}
+
+</div>{# end chapter-list #}
+
+
+{# ── BOTTOM ACTIONS ───────────────────────────────────────────────────────────── #}
+<div class="flex items-center justify-between pt-4 border-t border-slate-800">
+  <a href="/projects/{{ project.id }}/workbench"
+     class="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200 transition-colors">
+    <span>🛠</span>
+    <span>Fix issues in Workbench</span>
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+  </a>
+
+  <div class="flex items-center gap-3">
+    {# Single chapter re-run #}
+    {% if chapter_keys %}
+    <div class="flex items-center gap-2">
+      <select id="single-chapter-select"
+              class="bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300
+                     px-3 py-2 focus:outline-none focus:border-amber-500/50">
+        {% for key in chapter_keys %}
+        <option value="{{ key }}">Ch {{ key }}</option>
+        {% endfor %}
+      </select>
+      <a href="#"
+         onclick="handleSingleChapterClick(event, '/projects/{{ project.id }}/proofread/run'); return false;"
+         class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700
+                hover:border-slate-600 py-2 px-3 rounded-lg transition-colors no-underline">
+        Run on chapter only
+      </a>
+    </div>
+    {% endif %}
+
+    {# Full re-run #}
+    <a href="/projects/{{ project.id }}/proofread/run"
+       onclick="showRunOverlay()"
+       class="flex items-center gap-2 text-sm bg-amber-500/10 hover:bg-amber-500/20
+              text-amber-400 border border-amber-500/30 hover:border-amber-400/50
+              py-2 px-4 rounded-xl transition-colors no-underline">
+      🔎 Re-run Proofreader
+    </a>
+  </div>
+</div>
+
+{% else %}
+{# Report state exists but JSON unreadable #}
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
+  <p class="text-slate-500 text-sm">
+    Report file could not be read. Try running the proofreader again.
+  </p>
+</div>
+{% endif %}
+
+{% endif %}{# end not_run / report view #}
+
+{# ── Run overlay (outside if/else so it renders in ALL states) ───────────── #}
+<div id="run-overlay" class="hidden">
+  <div class="spinner"></div>
+  <div class="text-center">
+    <div class="text-lg font-serif text-amber-400 mb-2">Proofreading…</div>
+    <div class="text-sm text-slate-400">Reading each chapter and checking for surface-level issues.</div>
+    <div class="text-xs text-slate-600 mt-2">This takes 1–3 minutes for a full book.</div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  /* ── Chapter expand/collapse ─────────────────────────────────────────────── */
+  function toggleChapter(key) {
+    const card   = document.getElementById('chapter-card-'  + key);
+    const body   = document.getElementById('chapter-body-'  + key);
+    const header = document.getElementById('chapter-header-' + key);
+
+    if (!body) return;
+
+    const isOpen = !body.classList.contains('hidden');
+    if (isOpen) {
+      body.classList.add('hidden');
+      card.classList.remove('open');
+    } else {
+      body.classList.remove('hidden');
+      card.classList.add('open');
+    }
+  }
+
+  /* ── Single chapter selector in empty state ──────────────────────────────── */
+  function toggleSingleChapterEmpty(checked) {
+    const sel = document.getElementById('single-chap-select-empty');
+    if (!sel) return;
+    if (checked) {
+      sel.classList.remove('hidden');
+    } else {
+      sel.classList.add('hidden');
+      sel.name = '__disabled';
+    }
+    sel.name = checked ? 'single_chapter' : '__disabled';
+  }
+
+  /* ── Loading overlay ─────────────────────────────────────────────────────── */
+  function showRunOverlay() {
+    const overlay = document.getElementById('run-overlay');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+      overlay.classList.add('active');
+    }
+  }
+
+  /* ── Handle run link with optional single chapter ──────────────────────── */
+  function handleRunClick(event, baseUrl) {
+    event.preventDefault();
+    const select = document.getElementById('single-chap-select-empty');
+    if (select && !select.classList.contains('hidden')) {
+      const chapter = select.value;
+      if (chapter) {
+        window.location.href = baseUrl + '?chapter=' + encodeURIComponent(chapter);
+        showRunOverlay();
+        return;
+      }
+    }
+    window.location.href = baseUrl;
+    showRunOverlay();
+  }
+
+  /* ── Handle single chapter re-run link ───────────────────────────────── */
+  function handleSingleChapterClick(event, baseUrl) {
+    event.preventDefault();
+    const select = document.getElementById('single-chapter-select');
+    const chapter = select.value;
+    if (chapter) {
+      window.location.href = baseUrl + '?chapter=' + encodeURIComponent(chapter);
+      showRunOverlay();
+    }
+  }
+
+  /* ── Issue context markdown bold → HTML ─────────────────────────────────── */
+  /* Handles **text** that Gemini might return with unmatched closing tags.
+     We do a simple regex replace on load to convert **word** → <strong>word</strong> */
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.issue-context').forEach(function (el) {
+      el.innerHTML = el.innerHTML.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-400">$1</strong>');
+    });
+  });
+</script>
+{% endblock %}

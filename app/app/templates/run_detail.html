@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}{{ run.name }} — {{ project.name }}{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5">
+  <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+    <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+    <span>›</span>
+    <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+    <span>›</span>
+    <span class="text-slate-400">{{ run.name }}</span>
+  </div>
+  <div class="flex items-center justify-between">
+    <h1 class="text-xl font-semibold text-slate-100">{{ run.name }}</h1>
+    <span id="run-status-badge"
+          class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full
+      {% if run.status.value == 'complete' %}bg-emerald-900/50 text-emerald-400 border border-emerald-800
+      {% elif run.status.value == 'running' %}bg-blue-900/50 text-blue-400 border border-blue-800
+      {% elif run.status.value == 'paused' %}bg-amber-900/50 text-amber-400 border border-amber-800
+      {% elif run.status.value == 'failed' %}bg-red-900/50 text-red-400 border border-red-800
+      {% else %}bg-slate-800 text-slate-400 border border-slate-700{% endif %}">
+      <span class="w-1.5 h-1.5 rounded-full
+        {% if run.status.value == 'complete' %}bg-emerald-400
+        {% elif run.status.value == 'running' %}bg-blue-400 animate-pulse
+        {% elif run.status.value == 'paused' %}bg-amber-400
+        {% elif run.status.value == 'failed' %}bg-red-400
+        {% else %}bg-slate-500{% endif %}"></span>
+      {{ run.status.value | capitalize }}
+    </span>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+<div class="grid grid-cols-3 gap-6">
+
+  {# ── Pipeline steps (left, 2 cols) — fragment handles its own HTMX polling ── #}
+  {% include "fragments/pipeline_steps.html" %}
+
+  {# ── Run info sidebar (right, 1 col) ── #}
+  <div class="space-y-4">
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Run Config</h2>
+      <dl class="space-y-2.5 text-sm">
+
+        <div>
+          <dt class="text-slate-500 text-xs mb-0.5">Agents</dt>
+          <dd class="text-slate-300 font-mono text-xs">{{ run.agents_selected | join(' → ') }}</dd>
+        </div>
+
+        <div>
+          <dt class="text-slate-500 text-xs mb-0.5">Edit sensitivity</dt>
+          <dd class="text-slate-300">{{ (run.edit_sensitivity * 100) | int }}%</dd>
+        </div>
+
+        {% if run.agent_config and run.agent_config.get('3') %}
+        <div>
+          <dt class="text-slate-500 text-xs mb-0.5">Creativity level</dt>
+          <dd class="text-slate-300">{{ run.agent_config['3'].get('creativity_level', '—') }} / 5</dd>
+        </div>
+        {% endif %}
+
+        {% if run.agent_config and run.agent_config.get('4') %}
+        <div>
+          <dt class="text-slate-500 text-xs mb-0.5">Image provider</dt>
+          <dd class="text-slate-300">{{ run.agent_config['4'].get('provider', '—') }}</dd>
+        </div>
+        <div>
+          <dt class="text-slate-500 text-xs mb-0.5">Images per chapter</dt>
+          <dd class="text-slate-300">{{ run.agent_config['4'].get('illustrations_per_chapter', '—') }}</dd>
+        </div>
+        <div>
+          <dt class="text-slate-500 text-xs mb-0.5">Edge style</dt>
+          <dd class="text-slate-300">{{ run.agent_config['4'].get('edge_style', '—') }}</dd>
+        </div>
+        {% endif %}
+
+        <div class="pt-1 border-t border-slate-800">
+          <dt class="text-slate-500 text-xs mb-0.5">Created</dt>
+          <dd class="text-slate-300 text-xs"
+              data-localtime="{{ run.created_at.isoformat() }}">{{ run.created_at.strftime('%b %d, %Y at %H:%M') }}</dd>
+        </div>
+
+        {% if run.started_at %}
+        <div>
+          <dt class="text-slate-500 text-xs mb-0.5">Started</dt>
+          <dd class="text-slate-300 text-xs"
+              data-localtime="{{ run.started_at.isoformat() }}"
+              data-localtime-format="time">{{ run.started_at.strftime('%H:%M:%S') }}</dd>
+        </div>
+        {% endif %}
+
+        {% if run.completed_at %}
+        <div>
+          <dt class="text-slate-500 text-xs mb-0.5">Finished</dt>
+          <dd class="text-slate-300 text-xs"
+              data-localtime="{{ run.completed_at.isoformat() }}"
+              data-localtime-format="time">{{ run.completed_at.strftime('%H:%M:%S') }}</dd>
+        </div>
+        {% endif %}
+
+      </dl>
+    </div>
+
+    {% if run.status.value in ['running', 'paused'] %}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+      <p class="text-xs text-slate-500">
+        Page auto-refreshes every 3s while running.
+        <a href="" class="text-amber-500 hover:text-amber-400 transition-colors ml-1">
+          Refresh now ↺
+        </a>
+      </p>
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>{# end grid #}
+
+{# ── Editor reports (full width, below the grid) ─────────────────────────── #}
+{% if changelog or flags_review %}
+<div class="space-y-4">
+
+  {% if changelog %}
+  <details class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group">
+    <summary class="flex items-center justify-between px-6 py-4 cursor-pointer
+                    hover:bg-slate-800/50 transition-colors list-none">
+      <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <span class="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+          Editor Changelog
+        </span>
+        {% if not changelog_is_current %}
+        <span class="text-xs text-amber-500 font-medium">⚠ from a previous run</span>
+        {% else %}
+        <span class="text-xs text-slate-500">— what Agent 3 changed, chapter by chapter</span>
+        {% endif %}
+      </div>
+      <svg class="w-4 h-4 text-slate-500 transition-transform group-open:rotate-180 flex-shrink-0"
+           fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+      </svg>
+    </summary>
+    <div class="px-6 pb-6 pt-2 border-t border-slate-800">
+      {% if not changelog_is_current %}
+      <div class="mb-3 px-3 py-2 bg-amber-900/30 border border-amber-800/50 rounded-lg text-xs text-amber-400">
+        This is from a previous run{% if changelog_mtime %} ({{ changelog_mtime.strftime('%b %d at %H:%M') }}){% endif %} — run Agent 3 again to get a fresh changelog for this run.
+      </div>
+      {% endif %}
+      <pre class="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed font-mono overflow-auto
+                  max-h-[32rem] scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">{{ changelog }}</pre>
+    </div>
+  </details>
+  {% endif %}
+
+  {% if flags_review %}
+  <details class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group">
+    <summary class="flex items-center justify-between px-6 py-4 cursor-pointer
+                    hover:bg-slate-800/50 transition-colors list-none">
+      <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <span class="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+          Flags for Your Review
+        </span>
+        <span class="text-xs text-slate-500">— decisions Agent 3 couldn't make for you</span>
+      </div>
+      <svg class="w-4 h-4 text-slate-500 transition-transform group-open:rotate-180 flex-shrink-0"
+           fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+      </svg>
+    </summary>
+    <div class="px-6 pb-6 pt-2 border-t border-slate-800">
+      <pre class="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed font-mono overflow-auto
+                  max-h-[32rem] scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">{{ flags_review }}</pre>
+    </div>
+  </details>
+  {% endif %}
+
+</div>
+{% endif %}
+
+</div>{# end outer space-y-6 #}
+{% endblock %}

@@ -1,0 +1,625 @@
+{% extends "base.html" %}
+{% set active_page = "layout" %}
+
+{% block title %}Layout & Typesetting — {{ project.name }} — Cassian{% endblock %}
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+      <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+      <span>›</span>
+      <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+      <span>›</span>
+      <span class="text-slate-400">Layout & Typesetting</span>
+    </div>
+    <h1 class="font-serif text-2xl text-slate-100">Layout &amp; Typesetting</h1>
+    <p class="text-sm text-slate-500 mt-0.5">
+      Publisher-ready PDF — trim size, margins, fonts, chapter layout, and embedded illustrations
+    </p>
+  </div>
+
+  <div class="flex items-center gap-3">
+    {# Status badge #}
+    {% if status == "complete" %}
+      <span class="text-xs bg-green-900/40 text-green-400 border border-green-700/40 px-3 py-1.5 rounded-lg">
+        ✅ Complete
+      </span>
+    {% elif status == "stale" %}
+      <span class="text-xs bg-amber-900/40 text-amber-400 border border-amber-700/40 px-3 py-1.5 rounded-lg">
+        ⚠ Stale — chapters edited since last build
+      </span>
+    {% else %}
+      <span class="text-xs bg-slate-800 text-slate-500 border border-slate-700 px-3 py-1.5 rounded-lg">
+        Not run
+      </span>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── ERROR BANNER (shown if agent failed) ────────────────────────────────── #}
+{% if error %}
+<div class="mb-6 bg-red-900/30 border border-red-700/50 rounded-xl p-4">
+  <div class="flex items-start gap-3">
+    <span class="text-red-400 text-lg flex-shrink-0">✗</span>
+    <div>
+      <div class="text-sm font-semibold text-red-300 mb-1">Build failed</div>
+      <pre class="text-xs text-red-400/80 whitespace-pre-wrap font-mono leading-relaxed">{{ error }}</pre>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  SECTION 2: Configuration + Run Panel                                       #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+
+{# Extract config values with safe defaults #}
+{% set formatting    = config.get("formatting", {}) %}
+{% set avail_formats = formatting.get("available_formats", {}) %}
+{% set active_fmt    = formatting.get("default_format", "hardcover") %}
+{% set fonts         = formatting.get("fonts", {}) %}
+{% set book          = config.get("book", {}) %}
+{% set reading_order = book.get("reading_order", []) %}
+{% set layout_mode   = config.get("layout_mode", "novel") %}
+
+<div class="grid grid-cols-3 gap-6 mb-8">
+
+  {# ── LEFT: Format Settings (2/3) ─────────────────────────────────────────── #}
+  <div class="col-span-2">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+
+      <div class="flex items-center gap-2 mb-4">
+        <span class="text-base">📐</span>
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Format Settings</h2>
+        {% if avail_formats %}
+        <span class="text-xs text-slate-600">— select in the Build panel →</span>
+        {% endif %}
+      </div>
+
+      {# Active format summary #}
+      {% if avail_formats %}
+      {% set active_fmt_data = avail_formats.get(active_fmt, {}) %}
+      <div class="text-sm text-slate-300 mb-4">
+        Active Format:
+        <span class="text-amber-400 font-medium">
+          {{ active_fmt | replace("_", " ") | title }}
+          {% if active_fmt_data.trim_width_inches is defined %}
+            {{ active_fmt_data.trim_width_inches }}" × {{ active_fmt_data.trim_height_inches }}"
+          {% endif %}
+        </span>
+      </div>
+
+      {# Format cards — visual display only (selection is in the Build panel) #}
+      <div class="grid gap-3 mb-5" style="grid-template-columns: repeat({{ avail_formats | length }}, 1fr);">
+        {% for fmt_key, fmt_data in avail_formats.items() %}
+        <div class="p-3 rounded-lg border text-xs
+                    {% if fmt_key == active_fmt %}
+                      bg-amber-500/10 border-amber-500/40
+                    {% else %}
+                      bg-slate-800/50 border-slate-700/50
+                    {% endif %}">
+          <div class="font-semibold mb-1
+                      {% if fmt_key == active_fmt %}text-amber-400{% else %}text-slate-400{% endif %}">
+            {{ fmt_key | replace("_", " ") | title }}
+          </div>
+          {% if fmt_data.trim_width_inches is defined %}
+          <div class="text-slate-500">
+            {{ fmt_data.trim_width_inches }}" × {{ fmt_data.trim_height_inches }}"
+          </div>
+          {% endif %}
+          {% if fmt_key == active_fmt %}
+          <div class="mt-1 text-amber-500/70">● Selected</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {# Typography & margins row #}
+      <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-800">
+        <div>
+          <div class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Typography</div>
+          <dl class="space-y-1 text-xs">
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Body font</dt>
+              <dd class="text-slate-300">
+                {{ fonts.get("body", "—") }}
+                {% if fonts.get("body_size_pt") %}{{ fonts.body_size_pt }}pt{% endif %}
+              </dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Headings</dt>
+              <dd class="text-slate-300">
+                {{ fonts.get("chapter_heading", "—") }}
+                {% if fonts.get("chapter_heading_size_pt") %}{{ fonts.chapter_heading_size_pt }}pt{% endif %}
+              </dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Line spacing</dt>
+              <dd class="text-slate-300">{{ fonts.get("line_spacing", "—") }}×</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Layout mode</dt>
+              <dd class="text-slate-300">{{ layout_mode | title }}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div>
+          <div class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Content</div>
+          <dl class="space-y-1 text-xs">
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Chapters available</dt>
+              <dd class="text-amber-400 font-semibold">{{ chapter_count }}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Illustrations available</dt>
+              <dd class="
+                {% if illustration_count == chapter_count and chapter_count > 0 %}text-green-400
+                {% elif illustration_count > 0 %}text-amber-400
+                {% else %}text-slate-500{% endif %}
+                font-semibold">
+                {{ illustration_count }}
+                {% if chapter_count > 0 %}<span class="text-slate-600 font-normal">of {{ chapter_count }}</span>{% endif %}
+              </dd>
+            </div>
+            {% if active_fmt_data is defined and active_fmt_data %}
+            {% if active_fmt_data.get("margin_top_inches") %}
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Margins</dt>
+              <dd class="text-slate-400 text-xs">
+                ↑{{ active_fmt_data.margin_top_inches }}"
+                ↓{{ active_fmt_data.margin_bottom_inches }}"
+                ←{{ active_fmt_data.get("margin_inside_inches", "—") }}"
+                →{{ active_fmt_data.get("margin_outside_inches", "—") }}"
+              </dd>
+            </div>
+            {% endif %}
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  {# ── RIGHT: Build Controls (1/3) ─────────────────────────────────────────── #}
+  <div>
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 sticky top-4">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="text-base">🔨</span>
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Build PDF</h2>
+      </div>
+
+      <div id="build-form">
+
+        {# Format selector #}
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Format</label>
+          <select id="format-select"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200
+                         px-3 py-2 focus:outline-none focus:border-amber-500/50">
+            {% if avail_formats %}
+              {% for fmt_key in avail_formats.keys() %}
+              <option value="{{ fmt_key }}"
+                      {% if fmt_key == active_fmt %}selected{% endif %}>
+                {{ fmt_key | replace("_", " ") | title }}
+                {% set fd = avail_formats[fmt_key] %}
+                {% if fd.get("trim_width_inches") %}
+                  — {{ fd.trim_width_inches }}" × {{ fd.trim_height_inches }}"
+                {% endif %}
+              </option>
+              {% endfor %}
+            {% else %}
+              <option value="hardcover">Hardcover — 6.0" × 9.0"</option>
+              <option value="trade_paperback">Trade Paperback</option>
+              <option value="mass_market_paperback">Mass Market Paperback</option>
+            {% endif %}
+          </select>
+        </div>
+
+        {# Skip illustrations #}
+        <div class="mb-4">
+          <label class="flex items-center gap-2.5 cursor-pointer group">
+            <input type="checkbox"
+                   id="skip-illus"
+                   class="w-4 h-4 rounded bg-slate-800 border-slate-600
+                          checked:bg-amber-500 checked:border-amber-500">
+            <div>
+              <div class="text-sm text-slate-300 group-hover:text-slate-200">Skip illustrations</div>
+              <div class="text-xs text-slate-600">Faster build — text layout only</div>
+            </div>
+          </label>
+        </div>
+
+        {# Single chapter mode #}
+        <div class="mb-5">
+          <label class="flex items-start gap-2.5 cursor-pointer group mb-2">
+            <input type="checkbox"
+                   id="single-chap-check"
+                   onchange="toggleSingleChapter(this.checked)"
+                   class="w-4 h-4 rounded bg-slate-800 border-slate-600 mt-0.5
+                          checked:bg-amber-500 checked:border-amber-500">
+            <div>
+              <div class="text-sm text-slate-300 group-hover:text-slate-200">Single chapter only</div>
+              <div class="text-xs text-slate-600">Quick test — layout one chapter</div>
+            </div>
+          </label>
+          <div id="single-chap-select" class="hidden pl-6">
+            <select id="single-chapter-num"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200
+                           px-3 py-2 focus:outline-none focus:border-amber-500/50">
+              {% if reading_order %}
+                {% for ch in reading_order %}
+                <option value="{{ ch }}">
+                  {% if ch == "epilogue" or ch == "prologue" %}
+                    {{ ch | title }}
+                  {% else %}
+                    Chapter {{ ch }}
+                  {% endif %}
+                </option>
+                {% endfor %}
+              {% else %}
+                {% for n in range(1, chapter_count + 1) %}
+                <option value="{{ n }}">Chapter {{ n }}</option>
+                {% endfor %}
+              {% endif %}
+            </select>
+          </div>
+        </div>
+
+        {# Build button #}
+        <a href="/projects/{{ project.id }}/layout/run"
+           id="build-btn"
+           onclick="handleBuildClick(event); return false;"
+           class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold
+                  py-2.5 rounded-xl transition-colors text-sm flex items-center justify-center gap-2 no-underline">
+          <span>🔨</span>
+          <span>Build PDF</span>
+        </a>
+
+        {# Time estimate #}
+        <div class="mt-3 text-xs text-slate-600 text-center leading-relaxed" id="time-estimate">
+          {% if chapter_count > 1 %}
+            Estimated time: ~2–5 min<br>
+            ({{ chapter_count }} chapters
+            {% if illustration_count > 0 %}+ {{ illustration_count }} illustrations{% endif %})
+          {% else %}
+            Estimated time: ~30 sec
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  SECTION 3: Report Panel                                                    #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+
+<div id="report-panel">
+
+{% if status == "not_run" %}
+{# ─ Empty state ─ #}
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center">
+  <div class="text-5xl mb-5">📄</div>
+  <h2 class="font-serif text-xl text-slate-300 mb-2">No layout has been built yet</h2>
+  <p class="text-slate-500 text-sm">
+    Configure your settings above and click <strong class="text-slate-400">Build PDF</strong>.
+  </p>
+</div>
+
+{% else %}
+{# ─ Report exists (complete or stale) ─ #}
+
+{% if report %}
+
+<div class="grid grid-cols-3 gap-6">
+
+  {# ── LEFT: Full report (2/3) ─────────────────────────────────────────────── #}
+  <div class="col-span-2">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <span class="text-base">📋</span>
+          <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Layout Report</h2>
+        </div>
+        <span class="text-xs text-slate-600">
+          Built
+          <span data-localtime="{{ report.generated_at }}" data-localtime-format="full">
+            {{ report.generated_at[:16] | replace("T", " ") if report.generated_at else "" }}
+          </span>
+        </span>
+      </div>
+
+      {# Summary stats #}
+      <div class="grid grid-cols-4 gap-3 mb-5 p-4 bg-slate-800/40 rounded-lg">
+        <div class="text-center">
+          <div class="text-2xl font-bold text-amber-400">{{ report.page_count or "—" }}</div>
+          <div class="text-xs text-slate-500 mt-0.5">Pages</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-amber-400">
+            {% if report.file_size_mb %}{{ "%.1f" | format(report.file_size_mb) }}{% else %}—{% endif %}
+          </div>
+          <div class="text-xs text-slate-500 mt-0.5">MB</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-amber-400">{{ report.chapters_done or "—" }}</div>
+          <div class="text-xs text-slate-500 mt-0.5">Chapters</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-amber-400">{{ report.illustrations_embedded or "0" }}</div>
+          <div class="text-xs text-slate-500 mt-0.5">Illustrations</div>
+        </div>
+      </div>
+
+      {# Format & font row #}
+      <div class="flex flex-wrap gap-4 mb-5 pb-4 border-b border-slate-800 text-xs">
+        <div>
+          <span class="text-slate-500">Format:</span>
+          <span class="text-slate-300 ml-1">
+            {{ report.format | replace("_", " ") | title if report.format else "—" }}
+            {% if report.trim_size %}· {{ report.trim_size }}{% endif %}
+          </span>
+        </div>
+        <div>
+          <span class="text-slate-500">Font:</span>
+          <span class="text-slate-300 ml-1">{{ report.font_used or "—" }}</span>
+        </div>
+        {% if report.lulu_product %}
+        <div>
+          <span class="text-slate-500">Lulu:</span>
+          <span class="text-slate-300 ml-1">{{ report.lulu_product }}</span>
+        </div>
+        {% endif %}
+        {% if report.chapters_skipped and report.chapters_skipped > 0 %}
+        <div>
+          <span class="text-amber-500">⚠</span>
+          <span class="text-amber-400/80 ml-1">{{ report.chapters_skipped }} chapters skipped (no edited file)</span>
+        </div>
+        {% endif %}
+      </div>
+
+      {# Chapter breakdown table #}
+      {% if report.chapters_included %}
+      <div>
+        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Chapter Breakdown</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="border-b border-slate-800">
+                <th class="text-left text-slate-500 py-2 pr-4 font-medium">Chapter</th>
+                <th class="text-right text-slate-500 py-2 pr-4 font-medium">Words</th>
+                <th class="text-left text-slate-500 py-2 font-medium">Illustration</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/50">
+              {% for ch in report.chapters_included %}
+              <tr class="hover:bg-slate-800/30 transition-colors">
+                <td class="py-2 pr-4 text-slate-300">
+                  {{ ch.get("label") or ("Chapter " ~ ch.get("key", "?")) }}
+                </td>
+                <td class="py-2 pr-4 text-slate-500 text-right tabular-nums">
+                  {% if ch.get("word_count") %}{{ "{:,}".format(ch.word_count) }}{% else %}—{% endif %}
+                </td>
+                <td class="py-2">
+                  {% if ch.get("illustration") %}
+                    <span class="text-green-400">🖼 yes</span>
+                  {% else %}
+                    <span class="text-slate-600">— none</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if report.get("skipped") %}
+        <div class="mt-4 pt-3 border-t border-slate-800">
+          <div class="text-xs text-amber-500/80 flex items-start gap-2">
+            <span class="flex-shrink-0">⚠</span>
+            <span>
+              Skipped {{ report.chapters_skipped }} chapters (no edited file):
+              {% for s in report.skipped[:10] %}{{ s }}{% if not loop.last %}, {% endif %}{% endfor %}
+              {% if report.skipped | length > 10 %}… and {{ report.skipped | length - 10 }} more{% endif %}
+            </span>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  {# ── RIGHT: Actions panel (1/3) ──────────────────────────────────────────── #}
+  <div class="space-y-4">
+
+    {# Download PDF #}
+    {% if pdf_path %}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Output</h2>
+      <a href="/projects/{{ project.id }}/layout/download"
+         class="flex items-center gap-3 w-full bg-amber-500 hover:bg-amber-400
+                text-slate-950 font-semibold py-3 px-4 rounded-xl transition-colors text-sm mb-2">
+        <span class="text-lg">📄</span>
+        <div class="text-left">
+          <div>Download PDF</div>
+          <div class="text-xs font-normal opacity-75">
+            {{ report.page_count or "?" }} pages
+            {% if report.file_size_mb %}· {{ "%.1f" | format(report.file_size_mb) }} MB{% endif %}
+          </div>
+        </div>
+      </a>
+
+      {# View markdown report #}
+      {% set md_report = "projects/" ~ project.id ~ "/output/formatting/layout_report.md" %}
+      <div class="text-xs text-slate-600 mt-3">
+        <span class="text-slate-500">📋 Markdown report:</span>
+        <code class="text-slate-500 ml-1">output/formatting/layout_report.md</code>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Status card #}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Build Status</h2>
+
+      {% if status == "stale" %}
+      <div class="flex items-start gap-2 text-xs text-amber-400 bg-amber-900/20
+                  border border-amber-700/30 rounded-lg p-3 mb-3">
+        <span class="flex-shrink-0 mt-0.5">⚠</span>
+        <span>Chapters have been edited since this build. Rebuild for an up-to-date PDF.</span>
+      </div>
+      {% elif status == "complete" %}
+      <div class="flex items-start gap-2 text-xs text-green-400 bg-green-900/20
+                  border border-green-700/30 rounded-lg p-3 mb-3">
+        <span class="flex-shrink-0">✅</span>
+        <span>PDF is current — no chapters have changed since this build.</span>
+      </div>
+      {% endif %}
+
+      <div>
+        <a href="/projects/{{ project.id }}/layout/run"
+           onclick="handleRebuildClick(event, '{{ report.format or 'hardcover' }}'); return false;"
+           class="block w-full text-sm bg-amber-500/10 hover:bg-amber-500/20 text-amber-400
+                  border border-amber-500/30 hover:border-amber-400/50
+                  py-2 rounded-lg transition-colors text-center no-underline">
+          🔨 Rebuild
+        </a>
+      </div>
+      <p class="text-xs text-slate-600 mt-2 text-center leading-relaxed">
+        Rebuilds with current settings.<br>Replaces the existing report and PDF.
+      </p>
+    </div>
+
+  </div>
+
+</div>
+
+{% else %}
+{# Report state but no parseable report data #}
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
+  <p class="text-slate-500 text-sm">Layout report file could not be read. Try running the agent again.</p>
+</div>
+{% endif %}
+
+{% endif %}{# end status != not_run #}
+
+</div>{# end report-panel #}
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  /* Toggle single chapter selector */
+  function toggleSingleChapter(checked) {
+    const wrap = document.getElementById('single-chap-select');
+    const sel  = document.getElementById('single-chapter-num');
+    if (checked) {
+      wrap.classList.remove('hidden');
+      sel.name = 'single_chapter';
+    } else {
+      wrap.classList.add('hidden');
+      sel.name = '__single_chapter_disabled';
+    }
+  }
+
+  /* Show a full-page loading overlay when build starts.
+     The server takes 2-5 min for a full book — this keeps the user informed. */
+  function showBuildOverlay() {
+    const overlay = document.getElementById('build-overlay');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+    }
+    const btn = document.getElementById('build-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+    const est = document.getElementById('time-estimate');
+    if (est) {
+      est.textContent = 'Building… this may take a few minutes.';
+    }
+  }
+
+  /* Handle build link click with form data */
+  function handleBuildClick(event) {
+    event.preventDefault();
+    const format = document.getElementById('format-select')?.value || 'hardcover';
+    const skipIllus = document.getElementById('skip-illus')?.checked ? '1' : '0';
+    const singleChapCheck = document.getElementById('single-chap-check')?.checked;
+    const singleChapSelect = document.getElementById('single-chapter-num');
+
+    let url = '/projects/' + window.location.pathname.split('/')[2] + '/layout/run';
+    url += '?format=' + encodeURIComponent(format);
+    url += '&skip_illustrations=' + skipIllus;
+
+    if (singleChapCheck && singleChapSelect) {
+      const chapter = singleChapSelect.value;
+      if (chapter) {
+        url += '&single_chapter=' + encodeURIComponent(chapter);
+      }
+    }
+
+    window.location.href = url;
+    showBuildOverlay();
+  }
+
+  /* Handle rebuild link click with format preservation */
+  function handleRebuildClick(event, format) {
+    event.preventDefault();
+    const projectId = window.location.pathname.split('/')[2];
+    const url = '/projects/' + projectId + '/layout/run?format=' + encodeURIComponent(format);
+    window.location.href = url;
+    showBuildOverlay();
+  }
+</script>
+{% endblock %}
+
+
+{# ── Full-page build overlay (hidden until build starts) ───────────────────── #}
+{% block head %}
+<style>
+  #build-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(2, 6, 23, 0.85);
+    backdrop-filter: blur(4px);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1.5rem;
+  }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid #334155;
+    border-top-color: #fbbf24;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{# Overlay markup — outside the main content flow #}
+<div id="build-overlay" class="hidden">
+  <div class="spinner"></div>
+  <div class="text-center">
+    <div class="text-lg font-serif text-amber-400 mb-2">Building PDF…</div>
+    <div class="text-sm text-slate-400">
+      Laying out chapters, embedding fonts and illustrations.
+    </div>
+    <div class="text-xs text-slate-600 mt-2">This takes 2–5 minutes for a full book.</div>
+  </div>
+</div>

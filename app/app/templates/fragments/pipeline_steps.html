@@ -1,0 +1,265 @@
+{#
+  FRAGMENT: pipeline_steps.html
+  Renders the pipeline execution steps section.
+
+  Used in TWO places:
+    1. Included inside run_detail.html (initial page load)
+    2. Returned standalone from GET /projects/{id}/runs/{run_id}/status (HTMX polling)
+
+  When the run is still "running", this div includes hx-trigger="every 3s" so
+  HTMX will keep polling and swapping in fresh content.  When complete/failed/paused,
+  the trigger is absent and polling stops automatically.
+
+  Context variables required:
+    project          — Project ORM object
+    run              — PipelineRun ORM object
+    agents           — list of agent dicts from AGENTS in runs.py
+    agent_runs_map   — dict of {agent_num: AgentRun}  (may be empty if not started)
+#}
+
+<div id="pipeline-status"
+     class="col-span-2 space-y-3"
+     {% if run.status.value == 'running' %}
+     hx-get="/projects/{{ project.id }}/runs/{{ run.id }}/status"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML"
+     {% endif %}>
+
+  <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Pipeline</h2>
+
+  {% for agent in agents %}
+  {% set selected = agent.num in run.agents_selected %}
+  {% set ar = agent_runs_map.get(agent.num) %}
+
+  {#
+    Determine display state for this step:
+      skipped  — not in agents_selected
+      running  — currently executing (current_agent == this one)
+      complete — AgentRun exists and succeeded
+      failed   — AgentRun exists and failed
+      pending  — selected but not yet reached
+  #}
+  {% if not selected %}
+    {% set state = 'skipped' %}
+  {% elif ar %}
+    {% set state = ar.status.value %}
+  {% elif run.current_agent == agent.num and run.status.value == 'running' %}
+    {% set state = 'running' %}
+  {% else %}
+    {% set state = 'pending' %}
+  {% endif %}
+
+  <div class="flex items-start gap-4 p-4 rounded-xl border transition-all
+    {% if state == 'skipped' %}opacity-35 border-slate-800 bg-slate-900
+    {% elif state == 'running' %}border-blue-700 bg-blue-900/20
+    {% elif state == 'complete' %}border-emerald-800/50 bg-emerald-900/10
+    {% elif state == 'failed' %}border-red-800 bg-red-900/20
+    {% else %}border-slate-800 bg-slate-900{% endif %}">
+
+    <!-- Status icon -->
+    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5
+      {% if state == 'skipped' %}bg-slate-800 text-slate-600
+      {% elif state == 'running' %}bg-blue-900 text-blue-400
+      {% elif state == 'complete' %}bg-emerald-900 text-emerald-400
+      {% elif state == 'failed' %}bg-red-900 text-red-400
+      {% else %}bg-slate-800 text-slate-500{% endif %}">
+
+      {% if state == 'skipped' %}
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      {% elif state == 'running' %}
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+        </svg>
+      {% elif state == 'complete' %}
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+      {% elif state == 'failed' %}
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      {% else %}
+        <span class="text-xs font-mono">{{ agent.num }}</span>
+      {% endif %}
+    </div>
+
+    <!-- Name + desc + timing -->
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-sm font-medium
+          {% if state == 'skipped' %}text-slate-600
+          {% elif state == 'complete' %}text-emerald-300
+          {% elif state == 'running' %}text-blue-300
+          {% elif state == 'failed' %}text-red-300
+          {% else %}text-slate-200{% endif %}">
+          {{ agent.name }}
+        </span>
+
+        {% if state == 'skipped' %}
+          <span class="text-xs text-slate-600 italic">skipped</span>
+        {% elif state == 'running' %}
+          <span class="text-xs text-blue-400 animate-pulse">Running…</span>
+        {% elif state == 'complete' and ar and ar.started_at and ar.completed_at %}
+          {% set dur = ar.completed_at - ar.started_at %}
+          <span class="text-xs text-emerald-600">
+            {{ dur.seconds // 60 }}m {{ dur.seconds % 60 }}s
+          </span>
+        {% elif state == 'failed' %}
+          <span class="text-xs text-red-400 font-medium">Failed</span>
+        {% endif %}
+      </div>
+
+      <p class="text-xs text-slate-500 mt-0.5">{{ agent.desc }}</p>
+
+      {% if ar and ar.summary and ar.summary.get('output') %}
+      <details class="mt-2">
+        <summary class="text-xs cursor-pointer transition-colors
+          {% if state == 'failed' %}text-red-400 hover:text-red-300{% else %}text-slate-500 hover:text-slate-400{% endif %}">
+          Show output
+        </summary>
+        <pre class="mt-2 text-xs whitespace-pre-wrap font-mono leading-relaxed overflow-auto max-h-56 rounded-lg p-3
+          {% if state == 'failed' %}text-red-300/80 bg-red-950/40 border border-red-900/60
+          {% else %}text-slate-400 bg-slate-950 border border-slate-800{% endif %}">{{ ar.summary.get('output', '(no output)') }}</pre>
+      </details>
+      {% endif %}
+    </div>
+
+  </div>
+  {% endfor %}
+
+  <!-- ── Bottom CTA: changes based on run status ── -->
+
+  {% if run.status.value == 'pending' %}
+  <div class="pt-2">
+    <div class="p-5 bg-slate-900 border border-slate-800 rounded-xl">
+      <p class="text-sm text-slate-400 mb-4">
+        Ready to run agents
+        <strong class="text-slate-200">{{ run.agents_selected | join(', ') }}</strong>
+        in sequence.
+        {% if 4 in run.agents_selected %}
+        The pipeline will pause after editing so you can review the generated illustrations.
+        {% endif %}
+      </p>
+      <form method="post" action="/projects/{{ project.id }}/runs/{{ run.id }}/start">
+        <button type="submit"
+                class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400
+                       text-slate-950 font-semibold text-sm px-6 py-2.5 rounded-lg
+                       transition-colors cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832
+                     l3.197-2.132a1 1 0 000-1.664z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Start Pipeline
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {% elif run.status.value == 'running' %}
+  <div class="pt-1 text-center">
+    <p class="text-xs text-slate-500 animate-pulse">Pipeline running — page updates automatically every 3 seconds</p>
+  </div>
+
+  {% elif run.status.value == 'paused' %}
+
+  {% if run.current_agent == 3 %}
+  {# ── Paused at Agent 3: proposal review ── #}
+  <div class="p-4 bg-amber-900/20 border border-amber-700/60 rounded-xl mt-2">
+    <p class="text-sm text-amber-300 font-medium mb-2">⏸ Editing complete — proposals ready for review</p>
+    <p class="text-xs text-amber-500 mb-3">
+      Agent 3 has finished. It has applied automatic fixes and generated AI prose suggestions
+      for your review. Accept or reject each proposed change before the pipeline continues.
+      {% if proposals_pending is defined and proposals_pending > 0 %}
+      <span class="text-amber-400 font-medium">{{ proposals_pending }} proposals still undecided.</span>
+      {% endif %}
+    </p>
+    <a href="/projects/{{ project.id }}/runs/{{ run.id }}/proposals"
+       class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400
+              text-slate-950 font-semibold text-sm px-5 py-2 rounded-lg transition-colors">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      Review AI Proposals
+    </a>
+  </div>
+
+  {% else %}
+  {# ── Paused at Agent 4: illustration approval ── #}
+  <div class="p-4 bg-amber-900/20 border border-amber-700/60 rounded-xl mt-2">
+    <p class="text-sm text-amber-300 font-medium mb-1">⏸ Waiting for illustration approval</p>
+    <p class="text-xs text-amber-500">
+      Editing is done. Agent 4 has generated illustration prompts and images — review them
+      before the layout runs.
+      Illustration approval UI is coming soon.
+    </p>
+  </div>
+  {% endif %}
+
+  {% elif run.status.value == 'complete' %}
+  <div class="p-4 bg-emerald-900/20 border border-emerald-700/60 rounded-xl mt-2">
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex-1">
+        <p class="text-sm text-emerald-300 font-medium mb-2">✓ Pipeline complete</p>
+        {% if 5 in run.agents_selected and pdf_exists %}
+        <a href="/output/pdf?project_id={{ project.id }}" target="_blank"
+           class="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-600 text-emerald-100
+                  text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293
+                     l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          Open PDF{% if pdf_size_mb %} · {{ pdf_size_mb }} MB{% endif %}
+        </a>
+        {% elif 5 in run.agents_selected and not pdf_exists %}
+        <p class="text-xs text-red-400">
+          ⚠ Agent 5 ran but no PDF was found — check the output log above.
+        </p>
+        {% else %}
+        <p class="text-xs text-slate-500">
+          Agent 5 (Layout) was not included in this run — no PDF generated.
+        </p>
+        {% endif %}
+      </div>
+      <a href="/projects/{{ project.id }}/runs/new"
+         class="flex-shrink-0 text-xs bg-emerald-800 hover:bg-emerald-700 text-emerald-200
+                px-3 py-1.5 rounded-lg transition-colors">
+        New Run
+      </a>
+    </div>
+  </div>
+
+  {% elif run.status.value == 'failed' %}
+  <div class="p-4 bg-red-900/20 border border-red-700/60 rounded-xl mt-2">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <p class="text-sm text-red-300 font-medium mb-1">✕ Pipeline failed</p>
+        <p class="text-xs text-red-500">
+          See the failed agent above for the error output. Fix the issue and try again.
+        </p>
+      </div>
+      <div class="flex-shrink-0 flex flex-col gap-2 items-end">
+        <a href="/projects/{{ project.id }}/runs/new"
+           class="text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold
+                  px-3 py-1.5 rounded-lg transition-colors">
+          New Run
+        </a>
+        <a href="/projects/{{ project.id }}"
+           class="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+          ← Back to project
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {% endif %}
+
+</div>

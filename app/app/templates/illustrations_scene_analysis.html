@@ -1,0 +1,117 @@
+{#
+  illustrations_scene_analysis.html
+  Scene analysis results fragment — swapped into #scene-analysis-panel via HTMX.
+  Returned after POST /...chapter/{key}/analyze completes.
+
+  Context:
+    project       — Project
+    chapter       — Chapter
+    illustration  — Illustration (with prompt_data populated)
+    prompt_data   — dict (same as illustration.prompt_data)
+#}
+
+{% set ch_key = chapter.chapter_key %}
+
+{# ── Model badge ── #}
+{% if model_used %}
+<div class="mb-3 flex items-center gap-2">
+  <span class="text-xs px-2 py-0.5 rounded-full border border-slate-700 text-slate-500">
+    Analyzed with {{ model_used }}
+  </span>
+</div>
+{% endif %}
+
+{# ── Scene block ── #}
+{% if prompt_data.get('scene') %}
+<div class="mb-4 htmx-added">
+  <div class="text-xs text-slate-600 uppercase tracking-wider mb-1.5">Scene</div>
+  <p class="text-sm text-slate-300 leading-relaxed">{{ prompt_data.scene }}</p>
+</div>
+{% endif %}
+
+{# ── Mood tags ── #}
+{% if prompt_data.get('mood_tags') %}
+<div class="mb-4">
+  <div class="text-xs text-slate-600 uppercase tracking-wider mb-1.5">Mood</div>
+  <div class="flex flex-wrap gap-1.5">
+    {% for tag in prompt_data.mood_tags %}
+    <span class="px-2 py-0.5 rounded-full text-xs bg-violet-400/10 border border-violet-400/30 text-violet-300">
+      {{ tag }}
+    </span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Characters ── #}
+{% if prompt_data.get('characters') and prompt_data.characters != 'NONE' %}
+<div class="mb-4">
+  <div class="text-xs text-slate-600 uppercase tracking-wider mb-1.5">Characters</div>
+  <p class="text-xs text-slate-400">{{ prompt_data.characters }}</p>
+</div>
+{% endif %}
+
+{# ── Image prompt ── #}
+<div class="mb-4">
+  <div class="text-xs text-slate-600 uppercase tracking-wider mb-1.5">Image Prompt</div>
+  <div class="bg-slate-800/60 border border-slate-700/50 rounded-lg p-3">
+    <p class="text-xs text-slate-300 leading-relaxed font-mono">{{ prompt_data.get('image_prompt', '') }}</p>
+  </div>
+</div>
+
+{# ── Negative prompt ── #}
+{% if prompt_data.get('negative_prompt') %}
+<div class="mb-4">
+  <div class="text-xs text-red-500/70 uppercase tracking-wider mb-1.5">Avoid</div>
+  <p class="text-xs text-slate-500 italic">{{ prompt_data.negative_prompt }}</p>
+</div>
+{% endif %}
+
+{# ── Actions ── #}
+<div class="flex flex-col gap-2 mt-2">
+
+  {# Generate Image button #}
+  <button
+    hx-post="/projects/{{ project.id }}/illustrations/chapter/{{ ch_key }}/generate"
+    hx-target="#image-result-panel"
+    hx-swap="innerHTML"
+    hx-indicator="#gen-from-analysis-spinner"
+    hx-include="#model-tier"
+    hx-disabled-elt="this"
+    class="flex items-center gap-2 w-full justify-center text-sm px-4 py-2.5 rounded-xl
+           bg-amber-400 text-slate-950 font-semibold hover:bg-amber-300
+           transition-colors cursor-pointer">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+    </svg>
+    Generate Image
+    <svg id="gen-from-analysis-spinner"
+         class="htmx-indicator w-4 h-4 animate-spin"
+         fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+    </svg>
+  </button>
+
+  {# Re-analyze button #}
+  <button
+    hx-post="/projects/{{ project.id }}/illustrations/chapter/{{ ch_key }}/analyze"
+    hx-target="#scene-analysis-panel"
+    hx-swap="innerHTML"
+    hx-indicator="#reanalyze-spinner"
+    hx-include="#model-tier, #scene-nudge"
+    hx-disabled-elt="this"
+    class="flex items-center gap-2 w-full justify-center text-xs px-3 py-1.5 rounded-lg
+           border border-slate-700 text-slate-400
+           hover:border-violet-400/60 hover:text-violet-400 transition-colors cursor-pointer">
+    Re-analyze
+    <svg id="reanalyze-spinner"
+         class="htmx-indicator w-3 h-3 animate-spin"
+         fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+    </svg>
+  </button>
+
+</div>

@@ -1,0 +1,183 @@
+{#
+  cover_config_panel.html — HTMX fragment
+  Rendered by:
+    GET  /projects/{id}/cover           (full page initial load)
+    POST /projects/{id}/cover/profile   (after saving profile)
+  Swapped into:  #cover-config-panel
+#}
+
+{% if saved is defined and saved %}
+<div class="mb-4 bg-green-900/30 border border-green-700/50 rounded-lg px-4 py-2.5 flex items-center gap-2 text-sm text-green-400"
+     x-data="{}" x-init="setTimeout(() => $el.remove(), 3000)">
+  ✓ Publisher profile saved
+</div>
+{% endif %}
+
+<div class="grid grid-cols-2 gap-6">
+
+  {# ── Left: Publisher Settings Form ──────────────────────────────────────── #}
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">
+      ⚙ Publisher Settings
+    </h2>
+
+    <form
+      hx-post="/projects/{{ project.id }}/cover/profile"
+      hx-target="#cover-config-panel"
+      hx-swap="innerHTML"
+      class="space-y-4"
+    >
+      {# Publisher #}
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Publisher</label>
+        <select name="publisher"
+                onchange="applyPublisherDefaults(this.value)"
+                class="w-full bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500">
+          <option value="lulu"
+            {% if output_profile and output_profile.publisher.value == 'lulu' %}selected{% endif %}>
+            Lulu
+          </option>
+          <option value="ingram_spark"
+            {% if output_profile and output_profile.publisher.value == 'ingram_spark' %}selected{% endif %}>
+            IngramSpark
+          </option>
+          <option value="kdp"
+            {% if output_profile and output_profile.publisher.value == 'kdp' %}selected{% endif %}>
+            Amazon KDP
+          </option>
+          <option value="draft2digital"
+            {% if output_profile and output_profile.publisher.value == 'draft2digital' %}selected{% endif %}>
+            Draft2Digital
+          </option>
+          <option value="generic"
+            {% if output_profile and output_profile.publisher.value == 'generic' %}selected{% endif %}>
+            Generic / Custom
+          </option>
+        </select>
+      </div>
+
+      {# Book Format #}
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Book Format</label>
+        <select name="book_format"
+                class="w-full bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500">
+          <option value="hardcover_casewrap"
+            {% if output_profile and output_profile.book_format.value == 'hardcover_casewrap' %}selected{% endif %}>
+            Hardcover Casewrap
+          </option>
+          <option value="hardcover_dustjacket"
+            {% if output_profile and output_profile.book_format.value == 'hardcover_dustjacket' %}selected{% endif %}>
+            Hardcover Dust Jacket
+          </option>
+          <option value="trade_paperback"
+            {% if output_profile and output_profile.book_format.value == 'trade_paperback' %}selected{% endif %}>
+            Trade Paperback
+          </option>
+          <option value="mass_market_pb"
+            {% if output_profile and output_profile.book_format.value == 'mass_market_pb' %}selected{% endif %}>
+            Mass Market Paperback
+          </option>
+        </select>
+      </div>
+
+      {# Cover Type #}
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Cover Type</label>
+        <select name="cover_type"
+                class="w-full bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500">
+          <option value="wraparound"
+            {% if not output_profile or output_profile.cover_type.value == 'wraparound' %}selected{% endif %}>
+            Wraparound (front + spine + back)
+          </option>
+          <option value="dust_jacket"
+            {% if output_profile and output_profile.cover_type.value == 'dust_jacket' %}selected{% endif %}>
+            Dust Jacket
+          </option>
+          <option value="front_only"
+            {% if output_profile and output_profile.cover_type.value == 'front_only' %}selected{% endif %}>
+            Front Only (eBook)
+          </option>
+        </select>
+      </div>
+
+      {# Trim Size #}
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Trim Size (inches)</label>
+        <div class="flex items-center gap-2">
+          <input type="number" name="trim_width" id="trim-width"
+                 value="{{ output_profile.trim_width_inches if output_profile else 6.0 }}"
+                 step="0.125" min="4" max="12"
+                 class="w-24 bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500" />
+          <span class="text-slate-500 text-sm">×</span>
+          <input type="number" name="trim_height" id="trim-height"
+                 value="{{ output_profile.trim_height_inches if output_profile else 9.0 }}"
+                 step="0.125" min="4" max="17"
+                 class="w-24 bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500" />
+          <span class="text-xs text-slate-500">W × H</span>
+        </div>
+      </div>
+
+      {# Bleed #}
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Bleed (inches)</label>
+        <input type="number" name="bleed"
+               value="{{ output_profile.bleed_inches if output_profile else 0.125 }}"
+               step="0.0625" min="0" max="0.5"
+               class="w-28 bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500" />
+      </div>
+
+      {# Paper Type #}
+      <div>
+        <label class="block text-xs text-slate-400 mb-2">Paper Type</label>
+        <div class="flex gap-4">
+          <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <input type="radio" name="paper_type" value="cream"
+                   {% if not output_profile or output_profile.paper_type == 'cream' %}checked{% endif %}
+                   class="accent-amber-400" />
+            Cream
+          </label>
+          <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <input type="radio" name="paper_type" value="white"
+                   {% if output_profile and output_profile.paper_type == 'white' %}checked{% endif %}
+                   class="accent-amber-400" />
+            White
+          </label>
+        </div>
+        <div class="text-xs text-slate-600 mt-1">
+          Cream paper is slightly thicker — affects spine width
+        </div>
+      </div>
+
+      <button type="submit"
+              class="w-full px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-900 text-sm font-semibold rounded-lg transition-colors">
+        Save Profile
+      </button>
+    </form>
+  </div>
+
+  {# ── Right: Dimensions Calculator ────────────────────────────────────────── #}
+  <div id="cover-dimensions-panel">
+    {% include "fragments/cover_dimensions.html" %}
+  </div>
+
+</div>
+
+<script>
+  // Publisher quick-fill defaults
+  const PUBLISHER_DEFAULTS = {
+    lulu:          { trim_w: 6.0,    trim_h: 9.0,   bleed: 0.125 },
+    ingram_spark:  { trim_w: 6.0,    trim_h: 9.0,   bleed: 0.125 },
+    kdp:           { trim_w: 6.0,    trim_h: 9.0,   bleed: 0.125 },
+    draft2digital: { trim_w: 5.5,    trim_h: 8.5,   bleed: 0.125 },
+    generic:       { trim_w: 6.0,    trim_h: 9.0,   bleed: 0.125 },
+  };
+
+  function applyPublisherDefaults(publisher) {
+    const d = PUBLISHER_DEFAULTS[publisher];
+    if (!d) return;
+    const wEl = document.getElementById('trim-width');
+    const hEl = document.getElementById('trim-height');
+    if (wEl) wEl.value = d.trim_w;
+    if (hEl) hEl.value = d.trim_h;
+  }
+</script>

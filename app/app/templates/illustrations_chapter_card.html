@@ -1,0 +1,154 @@
+{#
+  illustrations_chapter_card.html
+  Single chapter gallery card — used in:
+    - illustrations.html (initial render, via {% include %})
+    - HTMX OOB swaps after approve/reject/regenerate
+
+  Context:
+    project   — Project object
+    chapter   — Chapter object
+    ch_status — string: "approved" | "generated" | "generating" | "rejected" |
+                        "regenerating" | "skipped" | "legacy" | "not_started"
+    thumb     — str URL or None
+    is_legacy — bool
+#}
+
+{# ── Status colour mapping ── #}
+{% if ch_status == 'approved' %}
+  {% set status_color = 'text-green-400' %}
+  {% set status_bg    = 'bg-green-400/10 border-green-400/30' %}
+  {% set status_label = '✓ Approved' %}
+  {% set btn_label    = 'View' %}
+  {% set btn_class    = 'border-green-600/50 text-green-400 hover:border-green-400 hover:bg-green-400/10' %}
+{% elif ch_status == 'generated' %}
+  {% set status_color = 'text-blue-400' %}
+  {% set status_bg    = 'bg-blue-400/10 border-blue-400/30' %}
+  {% set status_label = '⬤ Generated' %}
+  {% set btn_label    = 'Review' %}
+  {% set btn_class    = 'border-blue-600/50 text-blue-400 hover:border-blue-400 hover:bg-blue-400/10' %}
+{% elif ch_status == 'generating' %}
+  {% set status_color = 'text-amber-400' %}
+  {% set status_bg    = 'bg-amber-400/10 border-amber-400/30' %}
+  {% set status_label = '⏳ Generating' %}
+  {% set btn_label    = 'View' %}
+  {% set btn_class    = 'border-amber-600/50 text-amber-400/70' %}
+{% elif ch_status == 'regenerating' %}
+  {% set status_color = 'text-amber-400' %}
+  {% set status_bg    = 'bg-amber-400/10 border-amber-400/30' %}
+  {% set status_label = '⏳ Regenerating' %}
+  {% set btn_label    = 'View' %}
+  {% set btn_class    = 'border-amber-600/50 text-amber-400/70' %}
+{% elif ch_status == 'analyzed' %}
+  {% set status_color = 'text-violet-400' %}
+  {% set status_bg    = 'bg-violet-400/10 border-violet-400/30' %}
+  {% set status_label = '⬤ Analyzed' %}
+  {% set btn_label    = 'Generate' %}
+  {% set btn_class    = 'border-violet-600/50 text-violet-400 hover:border-violet-400 hover:bg-violet-400/10' %}
+{% elif ch_status == 'rejected' %}
+  {% set status_color = 'text-red-400' %}
+  {% set status_bg    = 'bg-red-400/10 border-red-400/30' %}
+  {% set status_label = '✗ Rejected' %}
+  {% set btn_label    = 'Regenerate' %}
+  {% set btn_class    = 'border-red-600/50 text-red-400 hover:border-red-400 hover:bg-red-400/10' %}
+{% elif ch_status == 'skipped' %}
+  {% set status_color = 'text-slate-500' %}
+  {% set status_bg    = 'bg-slate-700/30 border-slate-700' %}
+  {% set status_label = '— Skipped' %}
+  {% set btn_label    = 'Analyze' %}
+  {% set btn_class    = 'border-amber-400/30 text-amber-400/70 hover:border-amber-400 hover:text-amber-400' %}
+{% elif ch_status == 'legacy' %}
+  {% set status_color = 'text-purple-400' %}
+  {% set status_bg    = 'bg-purple-400/10 border-purple-400/30' %}
+  {% set status_label = '📁 Legacy' %}
+  {% set btn_label    = 'View' %}
+  {% set btn_class    = 'border-purple-600/50 text-purple-400/70' %}
+{% else %}
+  {# not_started #}
+  {% set status_color = 'text-slate-500' %}
+  {% set status_bg    = 'bg-slate-800/50 border-slate-700/40' %}
+  {% set status_label = '○ Not started' %}
+  {% set btn_label    = 'Analyze' %}
+  {% set btn_class    = 'border-amber-400/30 text-amber-400/70 hover:border-amber-400 hover:text-amber-400' %}
+{% endif %}
+
+<div id="chapter-card-{{ chapter.chapter_key }}"
+     class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden
+            flex flex-col hover:border-slate-700 transition-colors group">
+
+  {# ── Image / placeholder area ── #}
+  <div class="aspect-[4/3] bg-slate-800 relative flex items-center justify-center overflow-hidden">
+    {% if thumb %}
+      <img src="{{ thumb }}"
+           alt="Illustration for {{ chapter.title or chapter.chapter_key }}"
+           data-full-src="{{ thumb | replace('_thumb.jpg', '.png') }}"
+           data-caption="Ch. {{ chapter.chapter_key }} — {{ (chapter.title or '') | e }}"
+           class="lightbox-trigger w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300 cursor-zoom-in" />
+      {% if ch_status == 'approved' %}
+      <div class="absolute top-2 right-2">
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs
+                     bg-green-400/90 text-slate-900 font-semibold shadow">
+          ✓
+        </span>
+      </div>
+      {% endif %}
+    {% elif is_legacy %}
+      <div class="flex flex-col items-center gap-2 p-4 text-center">
+        <svg class="w-8 h-8 text-purple-500/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586
+                   a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6
+                   a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span class="text-xs text-purple-400/80">TIFF on disk</span>
+      </div>
+    {% else %}
+      <svg class="w-10 h-10 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586
+                 a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6
+                 a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+      </svg>
+    {% endif %}
+  </div>
+
+  {# ── Card body ── #}
+  <div class="p-3 flex flex-col gap-2 flex-1">
+
+    {# Chapter title #}
+    <div class="font-serif text-sm text-slate-200 leading-snug line-clamp-2"
+         title="{{ chapter.title or ('Chapter ' + chapter.chapter_key) }}">
+      {% if chapter.chapter_number %}
+        <span class="text-xs text-slate-600 not-serif font-sans">Ch. {{ chapter.chapter_number }} — </span>
+      {% endif %}
+      {{ chapter.title or ('Chapter ' + chapter.chapter_key) }}
+    </div>
+
+    {# Status badge #}
+    <div class="flex-1">
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border
+                   {{ status_bg }} {{ status_color }}">
+        {{ status_label }}
+      </span>
+    </div>
+
+    {# Action button — HTMX loads chapter detail panel #}
+    <div class="mt-auto">
+      <button
+        hx-get="/projects/{{ project.id }}/illustrations/chapter/{{ chapter.chapter_key }}/detail"
+        hx-target="#chapter-detail-panel"
+        hx-swap="innerHTML"
+        hx-indicator="#card-spinner-{{ chapter.chapter_key }}"
+        class="w-full flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+               border transition-colors cursor-pointer {{ btn_class }}">
+        {{ btn_label }}
+        <svg id="card-spinner-{{ chapter.chapter_key }}"
+             class="htmx-indicator w-3 h-3 animate-spin"
+             fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+      </button>
+    </div>
+
+  </div>
+</div>

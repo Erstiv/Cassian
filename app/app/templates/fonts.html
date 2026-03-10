@@ -1,0 +1,569 @@
+{% extends "base.html" %}
+
+{% block title %}Font Manager — {{ project.name }}{% endblock %}
+
+{% block head %}
+{# ── Google Fonts for preview — loaded dynamically by JS ─────────────── #}
+<link id="body-font-link"    rel="stylesheet" href="">
+<link id="heading-font-link" rel="stylesheet" href="">
+
+<style>
+  /* Preview pane paper feel */
+  .preview-paper {
+    background: #f8f6f1;
+    border: 1px solid #d4c9b0;
+    border-radius: 4px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.25);
+  }
+  /* Disabled section (greyed out when "same as body" checked) */
+  .section-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  /* Radio button group styling */
+  .font-radio:checked + .font-label {
+    color: #fbbf24;
+  }
+  /* Subtle divider between local / google groups */
+  .font-group-header {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #475569;
+    padding: 0.5rem 0 0.25rem;
+  }
+</style>
+{% endblock %}
+
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5">
+  {# Breadcrumb #}
+  <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+    <a href="/"                             class="hover:text-slate-300 transition-colors">Dashboard</a>
+    <span>›</span>
+    <a href="/projects/{{ project.id }}"    class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+    <span>›</span>
+    <span class="text-slate-400">Font Manager</span>
+  </div>
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-semibold text-slate-100">🔤 Font Manager</h1>
+      <p class="text-sm text-slate-500 mt-1" id="current-summary">
+        Body: <span class="text-slate-300">{{ font_config.body }} {{ font_config.body_size_pt }}pt</span>
+        &nbsp;·&nbsp;
+        Headings: <span class="text-slate-300">{{ font_config.chapter_heading }} {{ font_config.chapter_heading_size_pt }}pt</span>
+        &nbsp;·&nbsp;
+        Spacing: <span class="text-slate-300">{{ font_config.line_spacing }}×</span>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+<div class="max-w-screen-xl mx-auto">
+
+  {# ═══════════════════════════════════════════════════════════════════
+     MAIN GRID — two columns: Selection + Preview
+  ═══════════════════════════════════════════════════════════════════ #}
+  <form id="font-form"
+        hx-post="/projects/{{ project.id }}/fonts/save"
+        hx-target="#save-result"
+        hx-swap="innerHTML">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      {# ─── LEFT: Font Selection ─────────────────────────────────── #}
+      <div class="space-y-5">
+
+        {# ══ BODY FONT ══════════════════════════════════════════════ #}
+        <section class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <div class="px-5 py-3 border-b border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Body Font</h2>
+          </div>
+          <div class="px-5 py-4 space-y-4">
+
+            {# Local Fonts #}
+            {% if local_fonts %}
+            <div>
+              <div class="font-group-header">Local Fonts (on disk)</div>
+              <div class="space-y-0.5" id="body-local-fonts">
+                {% for fam in local_fonts %}
+                <label class="flex items-start gap-2.5 cursor-pointer group py-1">
+                  <input type="radio" name="body_font" value="{{ fam.family }}"
+                         class="mt-0.5 accent-amber-400"
+                         {% if font_config.body == fam.family %}checked{% endif %}
+                         onchange="updatePreview('body')">
+                  <span class="text-sm text-slate-300 group-hover:text-slate-100 transition-colors">
+                    {{ fam.family }}
+                    <span class="text-xs text-slate-500 ml-1">
+                      ({{ fam.variants | map(attribute='style') | join(', ') }})
+                    </span>
+                  </span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+
+            {# Google Fonts #}
+            <div>
+              <div class="font-group-header">Google Fonts — Book Serif Collection</div>
+              <div class="space-y-0.5">
+                {% for gf in google_fonts %}
+                <label class="flex items-start gap-2.5 cursor-pointer group py-1">
+                  <input type="radio" name="body_font" value="{{ gf.name }}"
+                         class="mt-0.5 accent-amber-400"
+                         {% if font_config.body == gf.name %}checked{% endif %}
+                         onchange="updatePreview('body')"
+                         data-google-family="{{ gf.google_family }}">
+                  <span class="text-sm text-slate-300 group-hover:text-slate-100 transition-colors">
+                    {{ gf.name }}
+                  </span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+
+            {# Size + spacing inputs #}
+            <div class="flex items-center gap-6 pt-1 border-t border-slate-800">
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-slate-500">Size</label>
+                <input type="number" name="body_size" id="body-size"
+                       value="{{ font_config.body_size_pt }}"
+                       min="6" max="36" step="0.5"
+                       class="w-16 bg-slate-800 border border-slate-700 text-slate-100 text-sm
+                              rounded-lg px-2 py-1 text-center focus:outline-none focus:border-amber-400"
+                       onchange="updatePreview('body')">
+                <span class="text-xs text-slate-500">pt</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-slate-500">Line spacing</label>
+                <input type="number" name="line_spacing" id="line-spacing"
+                       value="{{ font_config.line_spacing }}"
+                       min="1.0" max="3.0" step="0.05"
+                       class="w-16 bg-slate-800 border border-slate-700 text-slate-100 text-sm
+                              rounded-lg px-2 py-1 text-center focus:outline-none focus:border-amber-400"
+                       onchange="updatePreview('body')">
+                <span class="text-xs text-slate-500">×</span>
+              </div>
+            </div>
+
+            {# Upload #}
+            <div class="border-t border-slate-800 pt-3">
+              <div class="text-xs text-slate-500 mb-2">Upload a font file (.ttf or .otf, max 10 MB)</div>
+              <div class="flex items-center gap-2">
+                <input type="file" id="font-upload-input" accept=".ttf,.otf"
+                       class="hidden"
+                       onchange="uploadFont(this)">
+                <button type="button"
+                        onclick="document.getElementById('font-upload-input').click()"
+                        class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700
+                               text-slate-300 hover:text-slate-100 border border-slate-700
+                               transition-colors flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                  </svg>
+                  Upload Font File
+                </button>
+                <span id="upload-status" class="text-xs text-slate-500"></span>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        {# ══ HEADING FONT ════════════════════════════════════════════ #}
+        <section class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <div class="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Chapter Heading Font</h2>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" name="same_as_body" id="same-as-body"
+                     value="on"
+                     {% if font_config.body == font_config.chapter_heading %}checked{% endif %}
+                     onchange="toggleHeadingSection(this)"
+                     class="accent-amber-400">
+              <span class="text-xs text-slate-400">Same as body</span>
+            </label>
+          </div>
+
+          <div id="heading-font-section"
+               class="px-5 py-4 space-y-4
+                      {% if font_config.body == font_config.chapter_heading %}section-disabled{% endif %}">
+
+            {# Local Fonts #}
+            {% if local_fonts %}
+            <div>
+              <div class="font-group-header">Local Fonts</div>
+              <div class="space-y-0.5">
+                {% for fam in local_fonts %}
+                <label class="flex items-start gap-2.5 cursor-pointer group py-1">
+                  <input type="radio" name="heading_font" value="{{ fam.family }}"
+                         class="mt-0.5 accent-amber-400"
+                         {% if font_config.chapter_heading == fam.family %}checked{% endif %}
+                         onchange="updatePreview('heading')">
+                  <span class="text-sm text-slate-300 group-hover:text-slate-100 transition-colors">
+                    {{ fam.family }}
+                    <span class="text-xs text-slate-500 ml-1">
+                      ({{ fam.variants | map(attribute='style') | join(', ') }})
+                    </span>
+                  </span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+
+            {# Google Fonts #}
+            <div>
+              <div class="font-group-header">Google Fonts — Book Serif Collection</div>
+              <div class="space-y-0.5">
+                {% for gf in google_fonts %}
+                <label class="flex items-start gap-2.5 cursor-pointer group py-1">
+                  <input type="radio" name="heading_font" value="{{ gf.name }}"
+                         class="mt-0.5 accent-amber-400"
+                         {% if font_config.chapter_heading == gf.name %}checked{% endif %}
+                         onchange="updatePreview('heading')"
+                         data-google-family="{{ gf.google_family }}">
+                  <span class="text-sm text-slate-300 group-hover:text-slate-100 transition-colors">
+                    {{ gf.name }}
+                  </span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+
+            {# Heading size #}
+            <div class="flex items-center gap-2 pt-1 border-t border-slate-800">
+              <label class="text-xs text-slate-500">Size</label>
+              <input type="number" name="heading_size" id="heading-size"
+                     value="{{ font_config.chapter_heading_size_pt }}"
+                     min="12" max="72" step="1"
+                     class="w-16 bg-slate-800 border border-slate-700 text-slate-100 text-sm
+                            rounded-lg px-2 py-1 text-center focus:outline-none focus:border-amber-400"
+                     onchange="updatePreview('heading')">
+              <span class="text-xs text-slate-500">pt</span>
+            </div>
+
+          </div>
+        </section>
+
+        {# ══ Google Fonts note ═══════════════════════════════════════ #}
+        <div class="bg-amber-950/30 border border-amber-900/50 rounded-xl px-4 py-3">
+          <p class="text-xs text-amber-300/80 leading-relaxed">
+            <span class="font-semibold text-amber-300">Note:</span>
+            Google Fonts are available for browser preview. To use them in your printed PDF,
+            download the TTF files from
+            <a href="https://fonts.google.com" target="_blank"
+               class="underline hover:text-amber-200">fonts.google.com</a>
+            and upload them here.
+          </p>
+        </div>
+
+      </div>{# end left column #}
+
+      {# ─── RIGHT: Live Preview ──────────────────────────────────── #}
+      <div class="space-y-4">
+
+        {# Preview header #}
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Preview</h2>
+          <span class="text-xs text-slate-600">Updates as you change selections</span>
+        </div>
+
+        {# Preview paper #}
+        <div class="preview-paper p-8 space-y-6">
+
+          {# Chapter heading preview #}
+          <div>
+            <div class="text-xs text-slate-400/50 mb-2 font-sans uppercase tracking-widest text-center">
+              — Chapter Heading —
+            </div>
+            <div id="preview-heading"
+                 style="font-family: '{{ font_config.chapter_heading }}', Georgia, serif;
+                        font-size: {{ font_config.chapter_heading_size_pt }}pt;
+                        line-height: 1.2;
+                        color: #1a1a1a;
+                        text-align: center;">
+              {% if sample_text.chapter_number %}Chapter {{ sample_text.chapter_number }}{% endif %}
+              {% if sample_text.chapter_title %}
+              <div style="font-size: 0.55em; margin-top: 0.3em; opacity: 0.75;">
+                {{ sample_text.chapter_title | truncate(50, True, '…') }}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          {# Body text preview #}
+          <div>
+            <div class="text-xs text-slate-400/50 mb-2 font-sans uppercase tracking-widest text-center">
+              — Body Text —
+            </div>
+            <div id="preview-body"
+                 style="font-family: '{{ font_config.body }}', Georgia, serif;
+                        font-size: {{ font_config.body_size_pt }}pt;
+                        line-height: {{ font_config.line_spacing }};
+                        color: #1a1a1a;">
+              {% for para in sample_text.paragraphs %}
+              <p style="margin-bottom: 0.75em;">{{ para }}</p>
+              {% endfor %}
+            </div>
+          </div>
+
+          {# Specs bar #}
+          <div class="border-t border-slate-200 pt-3 mt-4">
+            <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 font-sans">
+              <span>Body: <span id="spec-body-font" class="text-slate-600 font-medium">{{ font_config.body }}</span></span>
+              <span>·</span>
+              <span>Size: <span id="spec-body-size" class="text-slate-600 font-medium">{{ font_config.body_size_pt }}pt</span></span>
+              <span>·</span>
+              <span>Leading: <span id="spec-line-height" class="text-slate-600 font-medium">{{ "%.1f"|format(font_config.body_size_pt * font_config.line_spacing) }}pt</span></span>
+              <span>·</span>
+              <span>Spacing: <span id="spec-spacing" class="text-slate-600 font-medium">{{ font_config.line_spacing }}×</span></span>
+              <span>·</span>
+              <span>Heading: <span id="spec-heading-font" class="text-slate-600 font-medium">{{ font_config.chapter_heading }}</span></span>
+              <span>·</span>
+              <span>Heading size: <span id="spec-heading-size" class="text-slate-600 font-medium">{{ font_config.chapter_heading_size_pt }}pt</span></span>
+            </div>
+          </div>
+
+        </div>{# end preview-paper #}
+
+      </div>{# end right column #}
+
+    </div>{# end grid #}
+
+    {# ══ SAVE BAR ══════════════════════════════════════════════════════ #}
+    <div class="mt-6 flex items-center justify-between bg-slate-900 border border-slate-800
+                rounded-xl px-6 py-4">
+      <div class="flex items-center gap-3">
+        <button type="submit"
+                class="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium
+                       bg-amber-500 hover:bg-amber-400 text-slate-950
+                       transition-colors shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3
+                     m-4 0V3m0 0L9 6m3-3l3 3"/>
+          </svg>
+          Save Font Settings
+        </button>
+        <div id="save-result" class="text-sm"></div>
+      </div>
+      <p class="text-xs text-slate-600">Changes will apply when you run the Layout agent</p>
+    </div>
+
+  </form>
+
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+// ── Font data from server ─────────────────────────────────────────────────────
+const GOOGLE_FONTS = {
+  {% for gf in google_fonts %}
+  "{{ gf.name }}": "{{ gf.google_family }}",
+  {% endfor %}
+};
+
+const LOCAL_FONTS = [
+  {% for fam in local_fonts %}
+  "{{ fam.family }}",
+  {% endfor %}
+];
+
+const PROJECT_ID = {{ project.id }};
+
+// ── Load a Google Font — try local first, fall back to CDN ────────────────────
+function loadGoogleFont(fontFamily, linkId) {
+  const googleFamily = GOOGLE_FONTS[fontFamily];
+  if (!googleFamily) return;  // unknown font
+
+  // Try local @font-face first (works if scripts/download_fonts.sh has been run)
+  ensureLocalFontFace(fontFamily);
+
+  // Also load from CDN as fallback (browser picks whichever loads first)
+  const link = document.getElementById(linkId);
+  if (!link) return;
+
+  const url = `https://fonts.googleapis.com/css2?family=${googleFamily}&display=swap`;
+  if (link.href !== url) {
+    link.href = url;
+  }
+}
+
+// ── Load a local font via @font-face into the page ───────────────────────────
+function ensureLocalFontFace(fontFamily) {
+  const styleId = `local-font-${fontFamily.replace(/\s+/g, '-')}`;
+  if (document.getElementById(styleId)) return;  // already injected
+
+  // Try to find a radio button for this family to get the filename
+  const radios = document.querySelectorAll(`input[value="${fontFamily}"]`);
+  // We'll try to serve the font by searching common filenames
+  // The serve endpoint handles the file lookup server-side
+  const familySlug = fontFamily.replace(/\s+/g, '');
+
+  const style = document.createElement('style');
+  style.id = styleId;
+  // Try to load the regular variant — filename pattern: FamilyName-Regular.ttf
+  style.textContent = `
+    @font-face {
+      font-family: '${fontFamily}';
+      src: url('/projects/${PROJECT_ID}/fonts/serve/${familySlug}-Regular.ttf') format('truetype'),
+           url('/projects/${PROJECT_ID}/fonts/serve/${familySlug}-VariableFont_wght.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// ── Core update function ──────────────────────────────────────────────────────
+function updatePreview(which) {
+  // 'which' is 'body', 'heading', or 'both'
+  if (which === 'body' || which === 'both') {
+    const bodyRadio = document.querySelector('input[name="body_font"]:checked');
+    const bodySize  = parseFloat(document.getElementById('body-size').value) || 11;
+    const spacing   = parseFloat(document.getElementById('line-spacing').value) || 1.4;
+
+    if (bodyRadio) {
+      const fontName = bodyRadio.value;
+
+      if (LOCAL_FONTS.includes(fontName)) {
+        ensureLocalFontFace(fontName);
+      } else {
+        loadGoogleFont(fontName, 'body-font-link');
+      }
+
+      const preview = document.getElementById('preview-body');
+      preview.style.fontFamily   = `'${fontName}', Georgia, serif`;
+      preview.style.fontSize     = `${bodySize}pt`;
+      preview.style.lineHeight   = `${spacing}`;
+
+      // Update specs
+      document.getElementById('spec-body-font').textContent  = fontName;
+      document.getElementById('spec-body-size').textContent  = bodySize + 'pt';
+      document.getElementById('spec-spacing').textContent    = spacing + '×';
+      document.getElementById('spec-line-height').textContent =
+        (bodySize * spacing).toFixed(1) + 'pt';
+    }
+  }
+
+  if (which === 'heading' || which === 'both') {
+    const sameAsBody = document.getElementById('same-as-body').checked;
+
+    let headingFontName, headingSize;
+
+    if (sameAsBody) {
+      const bodyRadio = document.querySelector('input[name="body_font"]:checked');
+      headingFontName = bodyRadio ? bodyRadio.value : 'EB Garamond';
+      headingSize     = parseFloat(document.getElementById('heading-size').value) || 24;
+    } else {
+      const headingRadio = document.querySelector('input[name="heading_font"]:checked');
+      headingFontName = headingRadio ? headingRadio.value : 'EB Garamond';
+      headingSize     = parseFloat(document.getElementById('heading-size').value) || 24;
+    }
+
+    if (LOCAL_FONTS.includes(headingFontName)) {
+      ensureLocalFontFace(headingFontName);
+    } else {
+      loadGoogleFont(headingFontName, 'heading-font-link');
+    }
+
+    const preview = document.getElementById('preview-heading');
+    preview.style.fontFamily = `'${headingFontName}', Georgia, serif`;
+    preview.style.fontSize   = `${headingSize}pt`;
+
+    // Update specs
+    document.getElementById('spec-heading-font').textContent = headingFontName;
+    document.getElementById('spec-heading-size').textContent = headingSize + 'pt';
+  }
+}
+
+// ── Toggle heading section when "Same as body" is checked ────────────────────
+function toggleHeadingSection(checkbox) {
+  const section = document.getElementById('heading-font-section');
+  if (checkbox.checked) {
+    section.classList.add('section-disabled');
+    // Mirror body selection into heading
+    updatePreview('heading');
+  } else {
+    section.classList.remove('section-disabled');
+  }
+}
+
+// ── Upload font file via HTMX-style fetch ────────────────────────────────────
+async function uploadFont(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const statusEl = document.getElementById('upload-status');
+  statusEl.textContent = 'Uploading…';
+  statusEl.className   = 'text-xs text-amber-400';
+
+  const formData = new FormData();
+  formData.append('font_file', file);
+
+  try {
+    const resp = await fetch(`/projects/${PROJECT_ID}/fonts/upload`, {
+      method: 'POST',
+      body:   formData,
+    });
+    const html = await resp.text();
+
+    if (resp.ok) {
+      // Inject updated local font list into both body and heading sections
+      const bodyContainer    = document.getElementById('body-local-fonts');
+      const headingContainer = document.getElementById('heading-local-fonts');
+      const wrapper          = document.createElement('div');
+      wrapper.innerHTML      = html;
+      const items            = wrapper.querySelector('.htmx-added');
+
+      if (bodyContainer && items) {
+        bodyContainer.innerHTML = items.innerHTML;
+      }
+
+      statusEl.textContent = '✓ Uploaded';
+      statusEl.className   = 'text-xs text-green-400';
+    } else {
+      statusEl.textContent = 'Upload failed';
+      statusEl.className   = 'text-xs text-red-400';
+    }
+  } catch (err) {
+    statusEl.textContent = 'Upload error';
+    statusEl.className   = 'text-xs text-red-400';
+  }
+
+  // Reset input so the same file can be re-uploaded if needed
+  input.value = '';
+}
+
+// ── On page load — initialise font links for current selections ───────────────
+document.addEventListener('DOMContentLoaded', function () {
+  const bodyRadio    = document.querySelector('input[name="body_font"]:checked');
+  const headingRadio = document.querySelector('input[name="heading_font"]:checked');
+
+  if (bodyRadio) {
+    if (!LOCAL_FONTS.includes(bodyRadio.value)) {
+      loadGoogleFont(bodyRadio.value, 'body-font-link');
+    }
+  }
+  if (headingRadio) {
+    if (!LOCAL_FONTS.includes(headingRadio.value)) {
+      loadGoogleFont(headingRadio.value, 'heading-font-link');
+    }
+  }
+
+  // If "same as body" starts checked, disable heading section
+  const sameCheckbox = document.getElementById('same-as-body');
+  if (sameCheckbox && sameCheckbox.checked) {
+    document.getElementById('heading-font-section').classList.add('section-disabled');
+  }
+});
+</script>
+{% endblock %}

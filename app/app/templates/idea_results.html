@@ -1,0 +1,187 @@
+{#
+  HTMX fragment — rendered both on initial page load (if brainstorm exists)
+  and as the swap target after POST /idea/brainstorm or /idea/refine.
+
+  Context vars expected: request, project, brainstorm
+#}
+<div id="brainstorm-results" class="space-y-6">
+
+  {% set sections = brainstorm.sections if brainstorm else {} %}
+
+  {# ── Title Options ──────────────────────────────────────────────────────── #}
+  {% if sections.TITLE_OPTIONS %}
+  <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-800">
+      <h3 class="text-xs font-semibold text-amber-400 uppercase tracking-widest">Title Options</h3>
+    </div>
+    <div class="px-6 py-4">
+      <div class="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{{ sections.TITLE_OPTIONS }}</div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Two-column row: Premise + Central Conflict ─────────────────────────── #}
+  <div class="grid grid-cols-2 gap-5">
+    {% if sections.PREMISE %}
+    <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-800">
+        <h3 class="text-xs font-semibold text-amber-400 uppercase tracking-widest">Premise</h3>
+      </div>
+      <div class="px-5 py-4 text-sm text-slate-300 leading-relaxed">{{ sections.PREMISE }}</div>
+    </div>
+    {% endif %}
+
+    {% if sections.CENTRAL_CONFLICT %}
+    <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-800">
+        <h3 class="text-xs font-semibold text-amber-400 uppercase tracking-widest">Central Conflict</h3>
+      </div>
+      <div class="px-5 py-4 text-sm text-slate-300 leading-relaxed">{{ sections.CENTRAL_CONFLICT }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Main Characters ─────────────────────────────────────────────────────── #}
+  {% if sections.MAIN_CHARACTERS %}
+  <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-800">
+      <h3 class="text-xs font-semibold text-amber-400 uppercase tracking-widest">Main Characters</h3>
+    </div>
+    <div class="px-6 py-4 text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{{ sections.MAIN_CHARACTERS }}</div>
+  </div>
+  {% endif %}
+
+  {# ── Three-column: Setting, Themes, Tone ────────────────────────────────── #}
+  <div class="grid grid-cols-3 gap-5">
+    {% if sections.SETTING %}
+    <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-800">
+        <h3 class="text-xs font-semibold text-amber-400 uppercase tracking-widest">Setting</h3>
+      </div>
+      <div class="px-5 py-4 text-sm text-slate-300 leading-relaxed">{{ sections.SETTING }}</div>
+    </div>
+    {% endif %}
+
+    {% if sections.THEMES %}
+    <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-800">
+        <h3 class="text-xs font-semibold text-amber-400 uppercase tracking-widest">Themes</h3>
+      </div>
+      <div class="px-5 py-4 text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{{ sections.THEMES }}</div>
+    </div>
+    {% endif %}
+
+    {% if sections.TONE_AND_STYLE %}
+    <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-800">
+        <h3 class="text-xs font-semibold text-amber-400 uppercase tracking-widest">Tone &amp; Style</h3>
+      </div>
+      <div class="px-5 py-4 text-sm text-slate-300 leading-relaxed">{{ sections.TONE_AND_STYLE }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Two-column: Comps + Chapter Estimate ──────────────────────────────── #}
+  <div class="grid grid-cols-2 gap-5">
+    {% if sections.COMPARABLE_TITLES %}
+    <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-800">
+        <h3 class="text-xs font-semibold text-amber-400 uppercase tracking-widest">Comparable Titles</h3>
+      </div>
+      <div class="px-5 py-4 text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{{ sections.COMPARABLE_TITLES }}</div>
+    </div>
+    {% endif %}
+
+    {% if sections.CHAPTER_ESTIMATE %}
+    <div class="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-800">
+        <h3 class="text-xs font-semibold text-amber-400 uppercase tracking-widest">Chapter Estimate</h3>
+      </div>
+      <div class="px-5 py-4 text-sm text-slate-300 leading-relaxed">{{ sections.CHAPTER_ESTIMATE }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Refine Panel ──────────────────────────────────────────────────────── #}
+  <div class="bg-slate-900/50 border border-slate-700/40 rounded-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-800">
+      <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Refine This Concept</h3>
+    </div>
+    <div class="p-6">
+      <form hx-post="/projects/{{ project.id }}/idea/refine"
+            hx-target="#brainstorm-results"
+            hx-swap="outerHTML"
+            hx-indicator="#refine-spinner"
+            class="flex gap-3 items-start">
+        <textarea name="feedback" rows="3" placeholder="What would you change or keep? e.g. 'Make the protagonist female, drop the military subplot, lean harder into the memory theme...'"
+                  class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                         text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500/70
+                         resize-none"></textarea>
+        <button type="submit"
+                class="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600
+                       text-slate-100 text-sm font-medium rounded-lg transition-colors flex-shrink-0 mt-0.5">
+          <span class="htmx-indicator hidden" id="refine-spinner">
+            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          </span>
+          🔄 Refine
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {# ── Apply to Project ──────────────────────────────────────────────────── #}
+  <div class="bg-slate-900/50 border border-slate-700/40 rounded-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-800">
+      <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Apply to Project</h3>
+    </div>
+    <div class="p-6">
+      <p class="text-sm text-slate-400 mb-4">
+        Save this concept to your project. You can edit any of these fields before applying.
+      </p>
+      <form hx-post="/projects/{{ project.id }}/idea/apply"
+            hx-target="#apply-result"
+            hx-swap="outerHTML"
+            class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Project Title</label>
+          <input type="text" name="title"
+                 value="{{ project.name }}"
+                 class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                        text-sm text-slate-100 focus:outline-none focus:border-amber-500/70">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Description / Premise</label>
+          <textarea name="description" rows="3"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                           text-sm text-slate-100 focus:outline-none focus:border-amber-500/70 resize-none">{{ project.description or (sections.PREMISE or '') }}</textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Genre</label>
+          <select name="genre"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+                         text-sm text-slate-100 focus:outline-none focus:border-amber-500/70">
+            {% set genres = [("fiction","Fiction"),("sci-fi","Science Fiction"),
+                              ("fantasy","Fantasy"),("thriller","Thriller"),
+                              ("romance","Romance"),("memoir","Memoir"),
+                              ("nonfiction","Nonfiction"),("business","Business"),
+                              ("poetry","Poetry"),("cookbook","Cookbook"),
+                              ("children","Children's"),("other","Other")] %}
+            {% for val, label in genres %}
+            <option value="{{ val }}" {% if project.genre == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit"
+                class="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400
+                       text-slate-900 text-sm font-semibold rounded-lg transition-colors">
+          ✓ Apply to Project
+        </button>
+      </form>
+      <div id="apply-result"></div>
+    </div>
+  </div>
+
+</div>
