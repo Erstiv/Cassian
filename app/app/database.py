@@ -46,6 +46,9 @@ def init_db():
         # Foundation v2: user ownership and genre
         "ALTER TABLE projects ADD COLUMN user_id INTEGER REFERENCES users(id)",
         "ALTER TABLE projects ADD COLUMN genre VARCHAR(64) DEFAULT 'fiction'",
+        # Auth v1: password login + admin flag
+        "ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)",
+        "ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0",
     ]
     with engine.connect() as conn:
         for stmt in new_columns:

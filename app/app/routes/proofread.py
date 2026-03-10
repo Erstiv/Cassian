@@ -25,6 +25,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import Project
 
 
@@ -175,8 +176,14 @@ async def proofread_page(
     db:         Session = Depends(get_db),
     error:      str = None,
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     status          = _get_proofread_status(project_id)
@@ -309,8 +316,14 @@ async def proofread_run(
     if request.method == "POST":
         form_data = await request.form()
         single_chapter = form_data.get("single_chapter", single_chapter) or form_data.get("chapter", single_chapter)
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # If already running, redirect to progress page
@@ -411,8 +424,14 @@ async def proofread_progress_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Read current progress
@@ -509,8 +528,14 @@ async def proofread_dismiss(
     request:     Request,
     db:          Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     data = _load_chapter_issues(project_id, chapter_key)
@@ -578,8 +603,14 @@ async def proofread_fix(
     """
     import re
 
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Load issue data
@@ -729,8 +760,14 @@ async def proofread_chapter_fragment(
     request:     Request,
     db:          Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     chapter_data = _load_chapter_issues(project_id, chapter_key)

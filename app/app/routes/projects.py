@@ -23,6 +23,7 @@ from app.models import (
     Project, ProjectStatus, OutputProfile,
     Publisher, BookFormat, CoverType
 )
+from app.auth import require_user
 
 router    = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).resolve().parent.parent / "templates")
@@ -43,8 +44,13 @@ PROJECTS_DIR = CASSIAN_DIR / "projects"
 @router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
     """Main dashboard — lists all projects."""
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     projects_list = (
         db.query(Project)
+        .filter(Project.user_id == user.id)
         .order_by(Project.updated_at.desc())
         .all()
     )
@@ -59,8 +65,12 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 # ─────────────────────────────────────────────────────────────────
 
 @router.get("/projects/new", response_class=HTMLResponse)
-def new_project_form(request: Request):
+def new_project_form(request: Request, db: Session = Depends(get_db)):
     """Render the new project creation form."""
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     return templates.TemplateResponse("project_new.html", {
         "request":    request,
         "publishers": [p.value for p in Publisher],
@@ -84,6 +94,9 @@ def create_project(
     db:          Session = Depends(get_db),
 ):
     """Create a new project and its default output profile, then redirect."""
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
 
     # Create the project
     project = Project(
@@ -92,6 +105,7 @@ def create_project(
         description = description.strip(),
         status      = ProjectStatus.DRAFT,
         layout_mode = layout_mode,
+        user_id     = user.id,
     )
     db.add(project)
     db.flush()  # get the project ID without committing yet
@@ -124,8 +138,12 @@ def create_project(
 @router.get("/projects/{project_id}", response_class=HTMLResponse)
 def project_detail(project_id: int, request: Request, db: Session = Depends(get_db)):
     """Project detail page — shows status, runs, upload area."""
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     profiles = project.output_profiles
@@ -170,8 +188,12 @@ async def upload_manuscript(
     On success, sends HX-Refresh so HTMX reloads the full page —
     this updates the chapter count, Info panel, and New Run button.
     """
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     dest_dir = UPLOADS_DIR / str(project_id) / "chapters"
@@ -255,8 +277,12 @@ async def reorder_chapters(
     db:         Session = Depends(get_db),
 ):
     """Save the user-defined chapter reading order."""
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     data = await request.json()
@@ -275,11 +301,16 @@ async def reorder_chapters(
 def set_layout_mode(
     project_id:  int,
     layout_mode: str     = Form(...),
+    request:     Request = None,
     db:          Session = Depends(get_db),
 ):
     """Update the project's layout mode (novel / poetry / essays)."""
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     project.layout_mode = layout_mode

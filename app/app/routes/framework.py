@@ -19,13 +19,14 @@ from pathlib import Path
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from google import genai
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import Project, Chapter
 
 
@@ -153,8 +154,14 @@ async def framework_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     chapters_db = (
@@ -190,8 +197,14 @@ async def framework_generate(
     structure_type: str  = Form("three_act"),
     notes:          str  = Form(""),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Build context from project + any existing brainstorm
@@ -265,8 +278,14 @@ async def framework_edit_chapter(
     summary:    str = Form(""),
     notes:      str = Form(""),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -307,8 +326,14 @@ async def framework_delete_chapter(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -344,8 +369,14 @@ async def framework_add_chapter(
     summary:    str = Form(""),
     position:   int = Form(-1),   # -1 = append at end
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id) or {
@@ -393,8 +424,14 @@ async def framework_reorder(
     db:         Session = Depends(get_db),
     order:      str = Form(""),   # JSON array of current indices in new order
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -431,8 +468,14 @@ async def framework_move_chapter(
     db:         Session = Depends(get_db),
     direction:  str = Form("up"),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -466,8 +509,14 @@ async def framework_apply(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)

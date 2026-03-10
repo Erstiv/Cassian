@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Admin — Cassian{% endblock %}
+
+{% block page_header %}
+<div class="px-8 pt-8 pb-4 border-b border-slate-800">
+  <h1 class="text-2xl font-semibold text-slate-100">Admin Panel</h1>
+  <p class="text-sm text-slate-500 mt-1">System overview and user management</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Stats Cards -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+    <div class="text-2xl font-semibold text-slate-100">{{ stats.total_users }}</div>
+    <div class="text-xs text-slate-500 mt-1">Total Users</div>
+  </div>
+
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+    <div class="text-2xl font-semibold text-green-400">{{ stats.active_users }}</div>
+    <div class="text-xs text-slate-500 mt-1">Active Users</div>
+  </div>
+
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+    <div class="text-2xl font-semibold text-slate-100">{{ stats.total_projects }}</div>
+    <div class="text-xs text-slate-500 mt-1">Total Projects</div>
+  </div>
+
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+    <div class="text-2xl font-semibold text-amber-400">{{ stats.admin_count }}</div>
+    <div class="text-xs text-slate-500 mt-1">Admins</div>
+  </div>
+
+</div>
+
+<!-- Quick Links -->
+<div class="space-y-2">
+  <a href="/admin/users"
+     class="flex items-center justify-between px-5 py-4 bg-slate-900 border border-slate-800 rounded-xl
+            hover:border-slate-700 transition-colors group">
+    <div>
+      <div class="text-sm font-medium text-slate-100">User Management</div>
+      <div class="text-xs text-slate-500 mt-0.5">View, edit roles, enable/disable accounts</div>
+    </div>
+    <svg class="w-5 h-5 text-slate-600 group-hover:text-slate-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+  </a>
+</div>
+
+{% endblock %}

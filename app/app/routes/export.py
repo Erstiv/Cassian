@@ -16,11 +16,12 @@ from pathlib import Path
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import Project, OutputProfile, Cover, CoverStatus
 
 
@@ -243,8 +244,14 @@ async def export_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     checklist    = _build_checklist(project_id, db)
@@ -306,8 +313,14 @@ async def export_download(
     file_type:  str,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     if file_type == "interior_pdf":
@@ -373,8 +386,14 @@ async def export_create_package(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     safe_name    = project.name.replace(" ", "_").replace("/", "_")[:40]
@@ -500,8 +519,14 @@ async def export_checklist_fragment(
     db:         Session = Depends(get_db),
 ):
     """HTMX endpoint — returns just the checklist panel HTML."""
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     checklist  = _build_checklist(project_id, db)

@@ -675,8 +675,10 @@ class User(Base):
     name        = Column(String(255), default="")
     avatar_url  = Column(String(512), nullable=True)   # Google profile picture
 
-    # Google OAuth fields
-    google_id   = Column(String(128), unique=True, nullable=True)
+    # Auth fields
+    google_id     = Column(String(128), unique=True, nullable=True)   # set when user signs in via Google
+    password_hash = Column(String(255), nullable=True)                # set when user registers with email/password
+    is_admin      = Column(Boolean, default=False)                    # system admin (Elliot only)
 
     role        = Column(Enum(UserRole), default=UserRole.OWNER, nullable=False)
     is_active   = Column(Boolean, default=True)

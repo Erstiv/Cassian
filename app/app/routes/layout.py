@@ -24,6 +24,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import Project
 
 
@@ -160,8 +161,14 @@ async def layout_page(
     db:         Session = Depends(get_db),
     error:      str = None,
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     layout_status      = _get_layout_status(project_id)
@@ -289,8 +296,14 @@ async def layout_run(
 
     # Convert skip_illustrations to bool
     skip_illustrations = skip_illustrations in ("1", "true", True)
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # If already running, redirect to progress page
@@ -383,8 +396,14 @@ async def layout_progress_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Read current progress
@@ -479,8 +498,14 @@ async def layout_report_fragment(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     layout_status = _get_layout_status(project_id)
@@ -506,8 +531,14 @@ async def layout_download(
     project_id: int,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     layout_status = _get_layout_status(project_id)

@@ -29,6 +29,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import Project
 
 
@@ -331,8 +332,12 @@ async def dev_editor_page(
     db: Session = Depends(get_db),
     error: str = None,
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     report      = _load_dev_report(project_id)
@@ -441,8 +446,12 @@ async def dev_editor_run(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # If already running, redirect to progress page
@@ -537,8 +546,12 @@ async def dev_editor_progress_page(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Read current progress
@@ -579,7 +592,15 @@ async def dev_editor_progress_page(
 async def dev_editor_progress_poll(
     project_id: int,
     request: Request,
+    db: Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    project = db.get(Project, project_id)
+    if not project or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Project not found")
     pf = _progress_file(project_id)
     if not pf.exists():
         # Done — tell HTMX to redirect
@@ -640,8 +661,12 @@ async def dev_editor_fix_preview(
     Generate an AI-powered fix preview for a dev editor issue.
     Issue types: plot_hole, structural_rec, chapter_flag
     """
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     api_key, model = _load_gemini_config(project_id)
@@ -995,8 +1020,12 @@ async def dev_editor_fix_apply(
     db:           Session = Depends(get_db),
 ):
     """Apply the previewed changes to the workbench working copies."""
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:

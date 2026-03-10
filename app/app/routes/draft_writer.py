@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from google import genai
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import Project
 
 
@@ -326,8 +327,14 @@ async def draft_writer_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework  = _load_framework(project_id)
@@ -371,8 +378,14 @@ async def draft_writer_generate(
     request:     Request,
     db:          Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -472,8 +485,14 @@ async def draft_writer_revise(
     db:          Session = Depends(get_db),
     feedback:    str = Form(""),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -556,8 +575,14 @@ async def draft_writer_approve(
     request:     Request,
     db:          Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     draft = _load_draft(project_id, chapter_num)
@@ -609,8 +634,14 @@ async def draft_writer_approve_all(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -644,8 +675,14 @@ async def draft_writer_generate_all(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -751,8 +788,14 @@ async def draft_writer_preview(
     request:     Request,
     db:          Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     draft = _load_draft(project_id, chapter_num)

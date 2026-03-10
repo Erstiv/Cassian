@@ -34,11 +34,12 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Form, Request, Depends, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import Project
 
 
@@ -215,8 +216,12 @@ async def workbench_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     chapters = _list_chapters(project_id)
@@ -241,8 +246,12 @@ async def workbench_load_chapter(
     request:     Request,
     db:          Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     data, source_label = _load_chapter_display(project_id, chapter_key)
@@ -281,8 +290,12 @@ async def workbench_paragraph_op(
     text:        str = Form(""),
     db:          Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     working = _load_or_create_working(project_id, chapter_key)
@@ -375,8 +388,12 @@ async def workbench_reset(
     request:     Request,
     db:          Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     wp = _working_path(project_id, chapter_key)
@@ -580,8 +597,12 @@ async def workbench_ai_op(
     direction:   str = Form(""),
     db:          Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     if operation not in _VALID_OPERATIONS:
@@ -658,8 +679,12 @@ async def workbench_ai_accept(
     text:        str = Form(...),
     db:          Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     working = _load_or_create_working(project_id, chapter_key)
@@ -705,8 +730,12 @@ async def workbench_ai_reject(
     request:     Request,
     db:          Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Load current working copy (no changes — user rejected the suggestion)

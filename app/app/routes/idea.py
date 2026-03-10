@@ -16,13 +16,14 @@ from pathlib import Path
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from google import genai
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import Project
 
 
@@ -178,8 +179,14 @@ async def idea_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     brainstorm = _load_brainstorm(project_id)
@@ -208,8 +215,14 @@ async def idea_brainstorm(
     tone:         str = Form(""),
     inspirations: str = Form(""),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
@@ -267,8 +280,14 @@ async def idea_refine(
     db:         Session = Depends(get_db),
     feedback:   str = Form(""),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     existing = _load_brainstorm(project_id)
@@ -327,8 +346,14 @@ async def idea_apply(
     description: str = Form(""),
     genre:       str = Form(""),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     if title.strip():

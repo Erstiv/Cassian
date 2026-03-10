@@ -28,11 +28,12 @@ from pathlib import Path
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import (
     Project, OutputProfile, Cover, IllustrationStyle, PipelineRun,
     Publisher, BookFormat, CoverType, CoverStatus, RunStatus,
@@ -292,8 +293,14 @@ async def cover_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Default OutputProfile (is_default=True, or first one)
@@ -363,8 +370,14 @@ async def cover_profile(
     bleed:       float = Form(0.125),
     paper_type:  str = Form("cream"),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Validate enum values (fall back to defaults on unknown)
@@ -462,8 +475,14 @@ async def cover_blurb_save(
     db:              Session = Depends(get_db),
     back_cover_text: str = Form(""),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Must have an OutputProfile before we can save a Cover record
@@ -530,8 +549,14 @@ async def cover_blurb_generate(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Load API config
@@ -631,8 +656,14 @@ async def cover_dimensions_fragment(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     output_profile = (
@@ -1175,8 +1206,14 @@ async def cover_generate_prompt(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     cfg = _get_api_config(project_id)
@@ -1268,8 +1305,14 @@ async def cover_generate_image(
     db:            Session = Depends(get_db),
     custom_prompt: str     = Form(""),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     cfg = _get_api_config(project_id)
@@ -1386,8 +1429,14 @@ async def cover_approve(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     cover = (
@@ -1437,8 +1486,14 @@ async def cover_reject(
     db:             Session = Depends(get_db),
     rejection_note: str     = Form(""),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     cover = (
@@ -1467,8 +1522,14 @@ async def cover_regenerate(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     cfg = _get_api_config(project_id)
@@ -1589,8 +1650,14 @@ async def cover_reset(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     cover = (
@@ -1622,8 +1689,14 @@ async def cover_text_settings_save(
     db:         Session = Depends(get_db),
 ):
     """Save cover text overlay settings to config.json and return the updated panel."""
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     form = await request.form()
@@ -1696,8 +1769,14 @@ async def cover_recompose(
     db:         Session = Depends(get_db),
 ):
     """Re-compose the wraparound using current text settings (no image regeneration)."""
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     cover = (
@@ -1751,8 +1830,14 @@ async def cover_image_serve(
     if ".." in filename or "/" in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     image_path = _get_project_dir(project_id) / "output" / "cover" / filename

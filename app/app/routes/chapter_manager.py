@@ -30,6 +30,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import Project
 
 router = APIRouter()
@@ -187,8 +188,14 @@ async def chapter_manager_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     chapters = _build_chapter_list(project_id)
@@ -219,8 +226,14 @@ async def chapter_add(
     position:     str = Form("end"),       # "end" or a number to insert after
     summary:      str = Form(""),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -293,8 +306,14 @@ async def chapter_rename(
     db:         Session = Depends(get_db),
     title:      str = Form(""),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -337,8 +356,14 @@ async def chapter_type_change(
     db:           Session = Depends(get_db),
     chapter_type: str = Form("chapter"),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -373,8 +398,14 @@ async def chapter_delete(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)
@@ -484,8 +515,14 @@ async def chapter_reorder(
     db:         Session = Depends(get_db),
     order:      str = Form(""),   # comma-separated old chapter numbers in new order
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     if not order.strip():
@@ -544,8 +581,14 @@ async def chapter_generate(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     framework = _load_framework(project_id)

@@ -11,12 +11,13 @@ from pathlib import Path
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Project, WorldRule
+from app.auth import require_user
 
 router    = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).resolve().parent.parent / "templates")
@@ -75,8 +76,12 @@ def world_rules_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     rules = (
@@ -111,8 +116,12 @@ async def add_rule(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     form = await request.form()
@@ -158,9 +167,17 @@ async def update_rule(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     rule = db.get(WorldRule, rule_id)
     if not rule or rule.project_id != project_id:
         raise HTTPException(status_code=404, detail="Rule not found")
+
+    project = db.get(Project, project_id)
+    if not project or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Project not found")
 
     form = await request.form()
     if form.get("title"):
@@ -184,11 +201,20 @@ async def update_rule(
 async def delete_rule(
     project_id: int,
     rule_id:    int,
+    request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     rule = db.get(WorldRule, rule_id)
     if not rule or rule.project_id != project_id:
         raise HTTPException(status_code=404, detail="Rule not found")
+
+    project = db.get(Project, project_id)
+    if not project or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Project not found")
 
     # Soft delete
     rule.is_active = False
@@ -205,10 +231,15 @@ async def delete_rule(
 @router.post("/projects/{project_id}/world-rules/genre-defaults")
 async def populate_genre_defaults(
     project_id: int,
+    request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     genre = getattr(project, 'genre', 'fiction') or 'fiction'
@@ -251,10 +282,15 @@ async def populate_genre_defaults(
 @router.get("/projects/{project_id}/world-rules/export")
 def export_rules(
     project_id: int,
+    request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     rules = (

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Users — Admin — Cassian{% endblock %}
+
+{% block page_header %}
+<div class="px-8 pt-8 pb-4 border-b border-slate-800">
+  <div class="flex items-center gap-3">
+    <a href="/admin" class="text-slate-500 hover:text-slate-300 transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </a>
+    <div>
+      <h1 class="text-2xl font-semibold text-slate-100">User Management</h1>
+      <p class="text-sm text-slate-500 mt-1">{{ users|length }} registered user{{ 's' if users|length != 1 else '' }}</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wider">
+        <th class="text-left py-3 px-4">User</th>
+        <th class="text-left py-3 px-4">Role</th>
+        <th class="text-left py-3 px-4">Status</th>
+        <th class="text-left py-3 px-4">Admin</th>
+        <th class="text-left py-3 px-4">Last Login</th>
+        <th class="text-left py-3 px-4">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800/50">
+      {% for u in users %}
+      <tr class="hover:bg-slate-900/50">
+
+        <!-- User info -->
+        <td class="py-3 px-4">
+          <div class="flex items-center gap-3">
+            {% if u.avatar_url %}
+            <img src="{{ u.avatar_url }}" class="w-8 h-8 rounded-full" alt="" />
+            {% else %}
+            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs text-slate-400">
+              {{ u.name[0] if u.name else '?' }}
+            </div>
+            {% endif %}
+            <div>
+              <div class="font-medium text-slate-100">{{ u.name or '(no name)' }}</div>
+              <div class="text-xs text-slate-500">{{ u.email }}</div>
+            </div>
+          </div>
+        </td>
+
+        <!-- Role -->
+        <td class="py-3 px-4">
+          <form hx-post="/admin/users/{{ u.id }}/role" hx-target="#role-status-{{ u.id }}" hx-swap="innerHTML"
+                class="flex items-center gap-2">
+            <select name="role"
+                    class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300
+                           focus:outline-none focus:border-amber-400/50">
+              {% for r in roles %}
+              <option value="{{ r }}" {{ 'selected' if u.role.value == r else '' }}>{{ r }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="text-xs text-amber-400 hover:text-amber-300">Save</button>
+          </form>
+          <div id="role-status-{{ u.id }}" class="text-xs mt-1"></div>
+        </td>
+
+        <!-- Active status -->
+        <td class="py-3 px-4">
+          {% if u.is_active %}
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-green-900/30 text-green-400 border border-green-800/30">
+              <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+              Active
+            </span>
+          {% else %}
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-500 border border-slate-700">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+              Disabled
+            </span>
+          {% endif %}
+        </td>
+
+        <!-- Admin badge -->
+        <td class="py-3 px-4">
+          {% if u.is_admin %}
+            <span class="text-amber-400 text-xs font-medium">Admin</span>
+          {% else %}
+            <span class="text-slate-600 text-xs">—</span>
+          {% endif %}
+        </td>
+
+        <!-- Last login -->
+        <td class="py-3 px-4 text-xs text-slate-500">
+          {% if u.last_login %}
+            <span class="local-time">{{ u.last_login.isoformat() }}</span>
+          {% else %}
+            Never
+          {% endif %}
+        </td>
+
+        <!-- Actions -->
+        <td class="py-3 px-4">
+          <div class="flex items-center gap-2">
+            <form hx-post="/admin/users/{{ u.id }}/toggle" hx-target="#toggle-status-{{ u.id }}" hx-swap="innerHTML">
+              <button type="submit"
+                      class="text-xs px-2 py-1 rounded border
+                             {% if u.is_active %}
+                               border-red-800/50 text-red-400 hover:bg-red-900/20
+                             {% else %}
+                               border-green-800/50 text-green-400 hover:bg-green-900/20
+                             {% endif %}
+                             transition-colors">
+                {{ 'Disable' if u.is_active else 'Enable' }}
+              </button>
+            </form>
+            <div id="toggle-status-{{ u.id }}" class="text-xs"></div>
+          </div>
+        </td>
+
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if not users %}
+<div class="text-center py-12 text-slate-500">
+  <p class="text-sm">No users registered yet.</p>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from starlette.responses import FileResponse, Response
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import Project
 
 
@@ -244,8 +245,14 @@ async def fonts_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     project_dir  = _get_project_dir(project_id)
@@ -282,8 +289,14 @@ async def fonts_save(
     line_spacing: float = Form(1.4),
     same_as_body: str  = Form(None),   # checkbox → "on" or absent
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     if same_as_body == "on":
@@ -333,8 +346,14 @@ async def fonts_preview(
     The caller supplies a Google Fonts family name; loading is handled client-side.
     This endpoint is kept minimal — the real live preview uses client-side JS.
     """
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     if not text:
@@ -363,8 +382,14 @@ async def fonts_upload(
     db:         Session = Depends(get_db),
     font_file:  UploadFile = File(...),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     filename = font_file.filename or ""
@@ -421,8 +446,14 @@ async def fonts_serve(
     filename:   str,
     db:         Session = Depends(get_db),
 ):
+
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Sanitise filename — no path traversal

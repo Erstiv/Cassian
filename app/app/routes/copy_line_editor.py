@@ -30,6 +30,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.auth import require_user
 from app.models import Project, PipelineRun, RunStatus
 
 
@@ -179,8 +180,12 @@ async def copy_line_editor_page(
     db:         Session = Depends(get_db),
     error:      str = None,
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     status = _get_editor_status(project_id)
@@ -228,11 +233,16 @@ async def copy_line_editor_page(
 @router.post("/projects/{project_id}/copy-line-editor/creativity", response_class=HTMLResponse)
 async def copy_line_editor_set_creativity(
     project_id: int,
+    request:    Request,
     level:      int = Form(...),
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     _set_creativity_level(project_id, level)
@@ -422,6 +432,10 @@ async def copy_line_editor_run(
     chapter:        str = None,       # alias — templates send ?chapter=
     error:          str = None,
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     # Accept both param names
     single_chapter = single_chapter or chapter
 
@@ -433,7 +447,7 @@ async def copy_line_editor_run(
         )
 
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # If already running, redirect to progress page
@@ -540,8 +554,12 @@ async def copy_line_editor_progress_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Read current progress
@@ -582,7 +600,16 @@ async def copy_line_editor_progress_page(
 async def copy_line_editor_progress_poll(
     project_id: int,
     request:    Request,
+    db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    project = db.get(Project, project_id)
+    if not project or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     pf = _progress_file(project_id)
     if not pf.exists():
         # Done — tell HTMX to redirect

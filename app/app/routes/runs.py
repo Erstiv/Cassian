@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Project, PipelineRun, AgentRun, RunStatus, OutputProfile
+from app.auth import require_user
 import json
 
 from app.pipeline.runner import start_pipeline, resume_pipeline, PROJECTS_DIR, _get_project_dir
@@ -61,8 +62,12 @@ def _agent_runs_map(run_id: int, db: Session) -> dict:
 
 @router.get("/projects/{project_id}/runs/new", response_class=HTMLResponse)
 def new_run_form(project_id: int, request: Request, db: Session = Depends(get_db)):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project  = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     profiles = project.output_profiles
@@ -85,8 +90,12 @@ async def create_run(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
-    if not project:
+    if not project or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     form = await request.form()
@@ -149,11 +158,20 @@ async def start_run(
     project_id:       int,
     run_id:           int,
     background_tasks: BackgroundTasks,
+    request:          Request,
     db:               Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     run = db.get(PipelineRun, run_id)
     if not run or run.project_id != project_id:
         raise HTTPException(status_code=404, detail="Run not found")
+
+    project = db.get(Project, project_id)
+    if not project or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Project not found")
 
     if run.status != RunStatus.PENDING:
         # Already started — just redirect back (idempotent)
@@ -179,9 +197,13 @@ def run_status_fragment(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
     run     = db.get(PipelineRun, run_id)
-    if not project or not run or run.project_id != project_id:
+    if not project or not run or run.project_id != project_id or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
 
     project_dir = _get_project_dir(project)
@@ -229,17 +251,28 @@ def run_status_fragment(
 # ─────────────────────────────────────────────────────────────────
 
 @router.get("/output/pdf")
-def download_pdf(project_id: int = 0, db: Session = Depends(get_db)):
+def download_pdf(project_id: int = 0, request: Request = None, db: Session = Depends(get_db)):
+    user = None
+    if request:
+        user = require_user(request, db)
+        if isinstance(user, RedirectResponse):
+            return user
+
     if project_id:
         project = db.get(Project, project_id)
+        if not project or (user and project.user_id != user.id):
+            raise HTTPException(status_code=404, detail="Project not found")
         project_dir = _get_project_dir(project) if project else PROJECTS_DIR / "default"
     else:
-        # Fallback: find most recent PDF across all projects
+        # Fallback: find most recent PDF across all user's projects
         all_pdfs = []
-        for p in PROJECTS_DIR.iterdir():
-            final_dir = p / "output" / "final"
-            if final_dir.exists():
-                all_pdfs.extend(final_dir.glob("*.pdf"))
+        if user:
+            user_project_ids = {p.id for p in db.query(Project).filter(Project.user_id == user.id).all()}
+            for p_id in user_project_ids:
+                p = PROJECTS_DIR / str(p_id)
+                final_dir = p / "output" / "final"
+                if final_dir.exists():
+                    all_pdfs.extend(final_dir.glob("*.pdf"))
         if not all_pdfs:
             raise HTTPException(status_code=404, detail="No PDF found — run the pipeline first.")
         pdf_path = max(all_pdfs, key=lambda p: p.stat().st_mtime)
@@ -266,10 +299,14 @@ def run_detail(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
     run     = db.get(PipelineRun, run_id)
 
-    if not project or not run or run.project_id != project_id:
+    if not project or not run or run.project_id != project_id or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
 
     # Load editor output files if they exist
@@ -337,9 +374,13 @@ def proposals_page(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
     run     = db.get(PipelineRun, run_id)
-    if not project or not run or run.project_id != project_id:
+    if not project or not run or run.project_id != project_id or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
 
     project_dir    = _get_project_dir(project)
@@ -397,9 +438,13 @@ async def review_proposal(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
     run     = db.get(PipelineRun, run_id)
-    if not project or not run or run.project_id != project_id:
+    if not project or not run or run.project_id != project_id or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
 
     form = await request.form()
@@ -508,9 +553,13 @@ async def bulk_review_chapter(
     request:    Request,
     db:         Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
     run     = db.get(PipelineRun, run_id)
-    if not project or not run or run.project_id != project_id:
+    if not project or not run or run.project_id != project_id or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
 
     form = await request.form()
@@ -550,9 +599,13 @@ async def apply_proposals(
     request:          Request,
     db:               Session = Depends(get_db),
 ):
+    user = require_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
     project = db.get(Project, project_id)
     run     = db.get(PipelineRun, run_id)
-    if not project or not run or run.project_id != project_id:
+    if not project or not run or run.project_id != project_id or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
 
     project_dir   = _get_project_dir(project)
