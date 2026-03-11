@@ -13,24 +13,28 @@
 from fastapi import Request, Depends
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
+import bcrypt
 
 from app.database import get_db
 from app.models import User
 
 # ── Password Hashing ──────────────────────────────────────────────
 # bcrypt is slow by design — makes brute-force attacks impractical
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Using bcrypt directly (passlib has compatibility issues with newer bcrypt)
 
 
 def hash_password(plain_password: str) -> str:
     """Hash a password for storage."""
-    return pwd_context.hash(plain_password)
+    password_bytes = plain_password.encode("utf-8")[:72]  # bcrypt max is 72 bytes
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password_bytes, salt).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Check a password against its hash. Returns True if they match."""
-    return pwd_context.verify(plain_password, hashed_password)
+    password_bytes = plain_password.encode("utf-8")[:72]
+    hash_bytes = hashed_password.encode("utf-8")
+    return bcrypt.checkpw(password_bytes, hash_bytes)
 
 
 # ── Current User from Session ─────────────────────────────────────
