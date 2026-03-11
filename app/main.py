@@ -54,21 +54,12 @@ app = FastAPI(
 )
 
 
-# ── Session Middleware ────────────────────────────────────────────────────────
-# Signs a cookie called "session" with SESSION_SECRET.
-# The cookie holds { "user_id": 123 } — nothing sensitive.
-# max_age = 30 days in seconds.
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=SESSION_SECRET,
-    session_cookie="cassian_session",
-    max_age=60 * 60 * 24 * 30,      # 30 days
-    same_site="lax",                  # CSRF protection
-    https_only=False,                 # Set True once HTTPS is live on Filou
-)
-
-
 # ── Middleware: inject current_user into every request ─────────────────────────
+# NOTE: In Starlette, the LAST middleware added is the OUTERMOST (runs first).
+# So we define inject_user FIRST, then SessionMiddleware SECOND.
+# That way SessionMiddleware runs first → populates request.session → then
+# inject_user reads from it.
+
 @app.middleware("http")
 async def inject_user_middleware(request: Request, call_next):
     """
@@ -87,6 +78,18 @@ async def inject_user_middleware(request: Request, call_next):
             db.close()
     response = await call_next(request)
     return response
+
+# ── Session Middleware (must be added AFTER @app.middleware so it wraps it) ────
+# Signs a cookie called "cassian_session" with SESSION_SECRET.
+# The cookie holds { "user_id": 123 } — nothing sensitive.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET,
+    session_cookie="cassian_session",
+    max_age=60 * 60 * 24 * 30,      # 30 days
+    same_site="lax",                  # CSRF protection
+    https_only=False,                 # Set True once HTTPS is live on Filou
+)
 
 
 # ── Static files (CSS, JS, images) ────────────────────────────────────────────
