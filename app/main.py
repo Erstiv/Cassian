@@ -25,8 +25,8 @@ from app.routes import (
     auth, admin,
     projects, runs, world_rules, dev_editor, copy_line_editor,
     workbench, illustrations, layout, cover, fonts, proofread,
-    idea, framework, draft_writer, diversity_reader, metadata,
-    export, consistency, chapter_manager,
+    idea, framework, draft_writer, diversity_reader, moral_impact,
+    metadata, export, consistency, chapter_manager,
 )
 
 
@@ -117,6 +117,7 @@ app.include_router(cover.router)
 app.include_router(fonts.router)
 app.include_router(proofread.router)
 app.include_router(diversity_reader.router)
+app.include_router(moral_impact.router)
 app.include_router(idea.router)
 app.include_router(framework.router)
 app.include_router(draft_writer.router)

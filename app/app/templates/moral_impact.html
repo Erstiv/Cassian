@@ -1,0 +1,718 @@
+{% extends "base.html" %}
+{% set active_page = "moral_impact" %}
+
+{% block title %}Moral Impact — {{ project.name }} — Cassian{% endblock %}
+
+{% block head %}
+<style>
+  #run-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(2, 6, 23, 0.85);
+    backdrop-filter: blur(4px);
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1.5rem;
+  }
+  #run-overlay.active {
+    display: flex;
+  }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid #334155;
+    border-top-color: #34d399;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Concern context: bold the flagged passage */
+  .concern-context strong { color: #34d399; }
+
+  /* Collapsible chapter expand icon rotation */
+  .chapter-expand-icon { transition: transform 200ms ease; }
+  .chapter-card.open .chapter-expand-icon { transform: rotate(90deg); }
+</style>
+{% endblock %}
+
+
+{% block page_header %}
+<div class="border-b border-slate-800 px-8 py-5 flex items-center justify-between">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+      <a href="/" class="hover:text-slate-300 transition-colors">Dashboard</a>
+      <span>›</span>
+      <a href="/projects/{{ project.id }}" class="hover:text-slate-300 transition-colors">{{ project.name }}</a>
+      <span>›</span>
+      <span class="text-slate-400">Moral Impact</span>
+    </div>
+    <h1 class="font-serif text-2xl text-slate-100">Moral Impact Editor</h1>
+    <p class="text-sm text-slate-500 mt-0.5">
+      Ethical and social impact review — ensures your book is a force for good
+    </p>
+  </div>
+
+  <div class="flex items-center gap-3">
+    {# Status badge #}
+    {% if status == "complete" %}
+      <span class="text-xs bg-green-900/40 text-green-400 border border-green-700/40 px-3 py-1.5 rounded-lg">
+        ✅ Complete
+      </span>
+    {% elif status == "stale" %}
+      <span class="text-xs bg-amber-900/40 text-amber-400 border border-amber-700/40 px-3 py-1.5 rounded-lg">
+        ⚠ Stale — chapters changed since last run
+      </span>
+    {% else %}
+      <span class="text-xs bg-slate-800 text-slate-500 border border-slate-700 px-3 py-1.5 rounded-lg">
+        Not run
+      </span>
+    {% endif %}
+
+    {# Run button #}
+    <a href="/projects/{{ project.id }}/moral-impact/run"
+       onclick="showRunOverlay()"
+       class="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950
+              font-semibold py-2 px-4 rounded-xl transition-colors text-sm no-underline">
+      <span>⚖️</span>
+      <span>{% if status == 'not_run' %}Run Moral Impact{% else %}Re-run Moral Impact{% endif %}</span>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── ERROR BANNER ─────────────────────────────────────────────────────────── #}
+{% if error %}
+<div class="mb-6 bg-red-900/30 border border-red-700/50 rounded-xl p-4">
+  <div class="flex items-start gap-3">
+    <span class="text-red-400 text-lg flex-shrink-0">✗</span>
+    <div>
+      <div class="text-sm font-semibold text-red-300 mb-1">Moral impact analysis failed</div>
+      <pre class="text-xs text-red-400/80 whitespace-pre-wrap font-mono leading-relaxed">{{ error }}</pre>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  EMPTY STATE                                                                 #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{% if status == "not_run" %}
+
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center max-w-2xl mx-auto">
+  <div class="text-5xl mb-5">⚖️</div>
+  <h2 class="font-serif text-xl text-slate-300 mb-2">No moral impact report yet</h2>
+  <p class="text-slate-500 text-sm mb-6">
+    The Moral Impact Editor reviews each chapter for ethical and social impact.
+    It flags content that might unintentionally cause harm and suggests ways
+    to make the book a more positive force — without censoring your creative vision.
+  </p>
+
+  <div class="text-left bg-slate-800/40 border border-slate-700/50 rounded-xl p-5 mb-8 text-sm">
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">What it checks</div>
+    <ul class="space-y-2 text-slate-400">
+      <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">●</span> Violence impact — gratuitous vs. purposeful, consequences shown</li>
+      <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">●</span> Trauma portrayal — handled with care or used as a plot device</li>
+      <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">●</span> Harmful ideologies — normalized or critically examined</li>
+      <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">●</span> Exploitation — vulnerable populations depicted thoughtfully</li>
+      <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">●</span> Misinformation risk — fiction that could mislead</li>
+      <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">●</span> Empathy & humanity, constructive messaging, environmental awareness</li>
+    </ul>
+  </div>
+
+  {# Run link with optional single-chapter #}
+  <div class="space-y-4">
+
+    {% if chapter_keys %}
+    <div class="flex items-center gap-3 justify-center text-sm">
+      <label class="flex items-center gap-2 text-slate-400 cursor-pointer">
+        <input type="checkbox" id="single-chap-check-empty"
+               onchange="toggleSingleChapterEmpty(this.checked)"
+               class="w-4 h-4 rounded bg-slate-800 border-slate-600">
+        Run on single chapter only
+      </label>
+      <select id="single-chap-select-empty"
+              class="hidden bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200
+                     px-3 py-1.5 focus:outline-none focus:border-emerald-500/50">
+        {% for key in chapter_keys %}
+        <option value="{{ key }}">Chapter {{ key }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <a href="/projects/{{ project.id }}/moral-impact/run"
+       id="run-link-empty"
+       onclick="handleRunClick(event, '/projects/{{ project.id }}/moral-impact/run'); return false;"
+       class="inline-block bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold
+              py-3 px-8 rounded-xl transition-colors text-sm no-underline">
+      ⚖️ Run Moral Impact Editor
+    </a>
+  </div>
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{#  REPORT VIEW (complete or stale)                                             #}
+{# ════════════════════════════════════════════════════════════════════════════ #}
+{% else %}
+
+{# ── STALE WARNING ── #}
+{% if status == "stale" %}
+<div class="mb-6 bg-amber-900/20 border border-amber-700/40 rounded-xl p-4 flex items-start gap-3">
+  <span class="text-amber-400 text-lg flex-shrink-0">⚠</span>
+  <div class="text-sm">
+    <span class="font-semibold text-amber-300">Report is stale.</span>
+    <span class="text-amber-400/80 ml-1">
+      One or more chapters have been modified since the last moral impact review.
+      Re-run to get an up-to-date report.
+    </span>
+  </div>
+</div>
+{% endif %}
+
+{% if report %}
+
+{# ── SUMMARY BAR ────────────────────────────────────────────────────────────── #}
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-6">
+
+  <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
+    <div>
+      <div>
+        <span class="text-2xl font-bold text-slate-100">{{ report.total_concerns }}</span>
+        <span class="text-slate-400 text-sm ml-2">
+          concern{{ 's' if report.total_concerns != 1 else '' }} across
+          {{ report.total_chapters }} chapter{{ 's' if report.total_chapters != 1 else '' }}
+        </span>
+      </div>
+
+      {# Severity breakdown #}
+      <div class="flex items-center gap-4 mt-2">
+        {% set flag_count    = report.by_severity.get('flag', 0) %}
+        {% set consider_count = report.by_severity.get('consider', 0) %}
+        {% set note_count    = report.by_severity.get('note', 0) %}
+
+        {% if flag_count %}
+        <span class="flex items-center gap-1.5 text-sm font-semibold text-red-400">
+          🔴 Flag: {{ flag_count }}
+        </span>
+        {% endif %}
+        {% if consider_count %}
+        <span class="flex items-center gap-1.5 text-sm font-semibold text-amber-400">
+          🟡 Consider: {{ consider_count }}
+        </span>
+        {% endif %}
+        {% if note_count %}
+        <span class="flex items-center gap-1.5 text-sm font-semibold text-blue-400">
+          🔵 Note: {{ note_count }}
+        </span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="text-right">
+      <span class="text-slate-600 text-xs">
+        Generated
+        <span data-localtime="{{ report.generated_at }}">
+          {{ report.generated_at[:16].replace('T', ' ') if report.generated_at else '' }}
+        </span>
+        UTC
+      </span>
+    </div>
+  </div>
+
+  {# Overall assessment quote #}
+  {% if report.overall_assessment %}
+  <div class="bg-slate-800/50 border border-slate-700/40 rounded-lg px-4 py-3 mb-4">
+    <p class="text-sm text-slate-300 italic leading-relaxed">
+      "{{ report.overall_assessment }}"
+    </p>
+  </div>
+  {% endif %}
+
+  {# Category breakdown #}
+  {% if report.by_category %}
+  <div class="flex flex-wrap gap-2">
+    {% set cat_styles = {
+      "violence_impact":       "bg-red-900/30 text-red-400 border-red-700/40",
+      "trauma_portrayal":      "bg-orange-900/30 text-orange-400 border-orange-700/40",
+      "harmful_ideologies":    "bg-rose-900/30 text-rose-400 border-rose-700/40",
+      "exploitation":          "bg-amber-900/30 text-amber-400 border-amber-700/40",
+      "misinformation_risk":   "bg-yellow-900/30 text-yellow-400 border-yellow-700/40",
+      "empathy_and_humanity":  "bg-emerald-900/30 text-emerald-400 border-emerald-700/40",
+      "constructive_messaging":"bg-teal-900/30 text-teal-400 border-teal-700/40",
+      "environmental_awareness":"bg-green-900/30 text-green-400 border-green-700/40",
+    } %}
+    {% for cat, count in report.by_category.items() | sort(attribute='1', reverse=True) %}
+    {% if cat != "error" %}
+    {% set style = cat_styles.get(cat, 'bg-slate-800 text-slate-400 border-slate-700') %}
+    <span class="flex items-center gap-1.5 text-xs border rounded-lg px-2.5 py-1 {{ style }}">
+      <span class="font-semibold">{{ count }}</span>
+      <span class="opacity-80">{{ cat.replace('_', ' ').title() }}</span>
+    </span>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+
+
+{# ── CHAPTER LIST ────────────────────────────────────────────────────────────── #}
+<div class="space-y-2 mb-8" id="chapter-list">
+
+  {% for ch_data in chapter_concerns %}
+  {% set ch_concerns    = ch_data.get('concerns', []) %}
+  {% set ch_strengths   = ch_data.get('strengths', []) %}
+  {% set acknowledged   = ch_concerns | selectattr('acknowledged', 'equalto', true) | list | length %}
+  {% set active_count   = ch_concerns | length - acknowledged %}
+  {% set summary        = ch_data.get('summary', {}) %}
+  {% set ch_key         = ch_data.get('chapter_key', '') %}
+
+  <div class="chapter-card bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
+       id="chapter-card-{{ ch_key }}">
+
+    {# ── Collapsed header (always visible) #}
+    <div class="flex items-center justify-between px-5 py-3.5 cursor-pointer
+                hover:bg-slate-800/50 transition-colors"
+         onclick="toggleChapter('{{ ch_key }}')"
+         id="chapter-header-{{ ch_key }}">
+
+      <div class="flex items-center gap-3 min-w-0">
+        {# Expand icon #}
+        <svg class="chapter-expand-icon w-4 h-4 text-slate-600 flex-shrink-0"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+
+        {# Chapter title #}
+        <div class="min-w-0">
+          <span class="text-sm font-medium text-slate-200">
+            Ch {{ ch_key }}:
+          </span>
+          <span class="text-sm text-slate-400 ml-1 truncate">
+            "{{ ch_data.get('title', '') }}"
+          </span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 flex-shrink-0">
+        {# Concern count or Clean badge #}
+        {% if active_count == 0 %}
+          <span class="text-xs font-semibold text-green-400 bg-green-900/30 border border-green-700/40
+                       px-2.5 py-0.5 rounded-lg">
+            ✓ Clean
+          </span>
+        {% else %}
+          {# Severity mini-bar #}
+          {% set flag_c    = ch_concerns | selectattr('severity', 'equalto', 'flag')    | rejectattr('acknowledged', 'equalto', true) | list | length %}
+          {% set consider_c = ch_concerns | selectattr('severity', 'equalto', 'consider') | rejectattr('acknowledged', 'equalto', true) | list | length %}
+          {% set note_c    = ch_concerns | selectattr('severity', 'equalto', 'note')    | rejectattr('acknowledged', 'equalto', true) | list | length %}
+          <div class="flex items-center gap-2 text-xs">
+            {% if flag_c %}<span class="text-red-400">🔴 {{ flag_c }}</span>{% endif %}
+            {% if consider_c %}<span class="text-amber-400">🟡 {{ consider_c }}</span>{% endif %}
+            {% if note_c %}<span class="text-blue-400">🔵 {{ note_c }}</span>{% endif %}
+          </div>
+        {% endif %}
+
+        {# Strengths count #}
+        {% if ch_strengths %}
+        <span class="text-xs text-emerald-500 opacity-70">
+          {{ ch_strengths | length }} strength{{ 's' if ch_strengths | length != 1 else '' }}
+        </span>
+        {% endif %}
+      </div>
+
+    </div>{# end header #}
+
+    {# ── Expanded body (hidden by default) #}
+    <div class="chapter-body hidden border-t border-slate-800/60"
+         id="chapter-body-{{ ch_key }}">
+
+      {# ── Strengths (if any) #}
+      {% if ch_strengths %}
+      <div class="px-5 py-3 border-b border-slate-800/40 bg-emerald-900/10">
+        <div class="text-xs font-semibold text-emerald-400 uppercase tracking-wide mb-2">
+          ✅ Positive Impact
+        </div>
+        <ul class="space-y-1">
+          {% for strength in ch_strengths %}
+          <li class="flex items-start gap-2 text-xs text-emerald-300/80">
+            <span class="text-emerald-500 mt-0.5 flex-shrink-0">●</span>
+            <span>{{ strength }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {# ── Concerns #}
+      {% if not ch_concerns %}
+        <p class="px-5 py-4 text-sm text-slate-500 text-center">No concerns found in this chapter.</p>
+      {% else %}
+        <div class="divide-y divide-slate-800/40" id="concern-list-{{ ch_key }}">
+
+          {% set sev_colors = {
+            "flag":    "text-red-400    bg-red-900/20    border-red-700/30",
+            "consider":"text-amber-400  bg-amber-900/20  border-amber-700/30",
+            "note":    "text-blue-400   bg-blue-900/20   border-blue-700/30",
+          } %}
+
+          {% set cat_label_colors = {
+            "violence_impact":       "text-red-400",
+            "trauma_portrayal":      "text-orange-400",
+            "harmful_ideologies":    "text-rose-400",
+            "exploitation":          "text-amber-400",
+            "misinformation_risk":   "text-yellow-400",
+            "empathy_and_humanity":  "text-emerald-400",
+            "constructive_messaging":"text-teal-400",
+            "environmental_awareness":"text-green-400",
+          } %}
+
+          {% set sev_icons = {"flag": "🔴", "consider": "🟡", "note": "🔵"} %}
+
+          {% for concern in ch_concerns %}
+          {% set loop_idx       = loop.index0 %}
+          {% set sev            = concern.get('severity', 'note').lower() %}
+          {% set cat            = concern.get('category', '') %}
+          {% set colors         = sev_colors.get(sev, 'text-slate-400 bg-slate-800 border-slate-700') %}
+          {% set cat_color      = cat_label_colors.get(cat, 'text-slate-400') %}
+          {% set is_acknowledged = concern.get('acknowledged', false) %}
+          {% set icon           = sev_icons.get(sev, '●') %}
+
+          {% set decision = concern.get('decision', '') %}
+          {% set author_note = concern.get('author_note', '') %}
+
+          <div id="concern-{{ ch_key }}-{{ loop_idx }}"
+               class="px-5 py-3.5 border rounded-none transition-opacity
+                      {% if decision == 'accept' %}bg-emerald-950/20 border-emerald-800/40
+                      {% elif decision == 'dismiss' %}opacity-40 {{ colors }}
+                      {% elif is_acknowledged %}opacity-40 {{ colors }}
+                      {% else %}{{ colors }}{% endif %}">
+
+            <div class="flex items-start gap-3">
+              {# Severity + category #}
+              <div class="flex-shrink-0 w-40">
+                <div class="text-xs font-semibold uppercase tracking-wide">
+                  {{ icon }} {{ sev.title() }}
+                </div>
+                <div class="text-xs mt-0.5 {{ cat_color }}">
+                  {{ cat.replace('_', ' ').title() }}
+                  <span class="text-slate-600 ml-1">¶{{ concern.get('paragraph_index', '?') }}</span>
+                </div>
+              </div>
+
+              {# Context + explanation + suggestion #}
+              <div class="flex-1 min-w-0">
+                <div class="text-xs font-mono leading-relaxed break-words concern-context
+                            {{ 'line-through' if decision == 'dismiss' else '' }}">
+                  {{ concern.get('context', '') }}
+                </div>
+                <div class="text-xs text-slate-500 mt-1 {{ 'line-through' if decision == 'dismiss' else '' }}">
+                  <span class="text-slate-600">→</span>
+                  {{ concern.get('explanation', '') }}
+                </div>
+                {% if concern.get('suggestion') and decision != 'dismiss' %}
+                <div class="text-xs mt-1.5 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2">
+                  <span class="text-emerald-400 font-medium">Suggestion:</span>
+                  <span class="text-slate-300">{{ concern.get('suggestion', '') }}</span>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+
+            {# Action buttons / state display #}
+            <div id="concern-actions-{{ ch_key }}-{{ loop_idx }}" class="mt-2.5 ml-[10.5rem]">
+              {% if decision == 'accept' %}
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-900/40 border border-emerald-700/50 rounded-lg px-3 py-1.5">
+                  ✓ Will address
+                </span>
+                {% if author_note %}
+                <span class="text-xs text-slate-400 italic">— {{ author_note }}</span>
+                {% endif %}
+                <button hx-post="/projects/{{ project.id }}/moral-impact/respond/{{ ch_key }}/{{ loop_idx }}"
+                        hx-vals='{"decision":"reset"}' hx-target="#concern-{{ ch_key }}-{{ loop_idx }}" hx-swap="outerHTML"
+                        class="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer ml-auto">
+                  Undo
+                </button>
+              </div>
+              {% elif decision == 'dismiss' %}
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="inline-flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-1.5">
+                  Dismissed — intentional choice
+                </span>
+                {% if author_note %}
+                <span class="text-xs text-slate-500 italic">— {{ author_note }}</span>
+                {% endif %}
+                <button hx-post="/projects/{{ project.id }}/moral-impact/respond/{{ ch_key }}/{{ loop_idx }}"
+                        hx-vals='{"decision":"reset"}' hx-target="#concern-{{ ch_key }}-{{ loop_idx }}" hx-swap="outerHTML"
+                        class="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer ml-auto">
+                  Undo
+                </button>
+              </div>
+              {% elif is_acknowledged %}
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-600">Noted ✓</span>
+                <button hx-post="/projects/{{ project.id }}/moral-impact/respond/{{ ch_key }}/{{ loop_idx }}"
+                        hx-vals='{"decision":"reset"}' hx-target="#concern-{{ ch_key }}-{{ loop_idx }}" hx-swap="outerHTML"
+                        class="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer">
+                  Undo
+                </button>
+              </div>
+              {% else %}
+              <div class="flex items-center gap-2 flex-wrap">
+                <button hx-post="/projects/{{ project.id }}/moral-impact/respond/{{ ch_key }}/{{ loop_idx }}"
+                        hx-vals='{"decision":"accept"}' hx-target="#concern-{{ ch_key }}-{{ loop_idx }}" hx-swap="outerHTML"
+                        class="text-xs font-medium bg-emerald-900/60 hover:bg-emerald-800 text-emerald-300
+                               border border-emerald-700/50 rounded-lg px-3 py-1.5 transition-colors cursor-pointer">
+                  ✓ Will Address
+                </button>
+                <button onclick="openConcernEditor('{{ ch_key }}', {{ loop_idx }})"
+                        class="text-xs font-medium bg-blue-900/40 hover:bg-blue-900/70 text-blue-400
+                               border border-blue-800/40 rounded-lg px-3 py-1.5 transition-colors cursor-pointer">
+                  ✎ Add Note
+                </button>
+                <button hx-post="/projects/{{ project.id }}/moral-impact/respond/{{ ch_key }}/{{ loop_idx }}"
+                        hx-vals='{"decision":"dismiss"}' hx-target="#concern-{{ ch_key }}-{{ loop_idx }}" hx-swap="outerHTML"
+                        class="text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-400
+                               border border-slate-700 rounded-lg px-3 py-1.5 transition-colors cursor-pointer">
+                  Dismiss — Intentional Choice
+                </button>
+              </div>
+              {% endif %}
+            </div>
+
+          </div>
+          {% endfor %}
+
+        </div>
+      {% endif %}
+
+    </div>{# end body #}
+  </div>{# end chapter-card #}
+  {% endfor %}
+
+</div>{# end chapter-list #}
+
+
+{# ── BOTTOM ACTIONS ───────────────────────────────────────────────────────────── #}
+<div class="flex items-center justify-between pt-4 border-t border-slate-800">
+  <p class="text-xs text-slate-600 italic max-w-sm">
+    Concerns are advisory only. Dark themes handled thoughtfully can make the world better —
+    this tool helps ensure your creative choices are intentional.
+  </p>
+
+  <div class="flex items-center gap-3">
+    {# Single chapter re-run #}
+    {% if chapter_keys %}
+    <div class="flex items-center gap-2">
+      <select id="single-chapter-select"
+              class="bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300
+                     px-3 py-2 focus:outline-none focus:border-emerald-500/50">
+        {% for key in chapter_keys %}
+        <option value="{{ key }}">Ch {{ key }}</option>
+        {% endfor %}
+      </select>
+      <a href="#"
+         onclick="handleSingleChapterClick(event, '/projects/{{ project.id }}/moral-impact/run'); return false;"
+         class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700
+                hover:border-slate-600 py-2 px-3 rounded-lg transition-colors no-underline">
+        Run on chapter only
+      </a>
+    </div>
+    {% endif %}
+
+    {# Full re-run #}
+    <a href="/projects/{{ project.id }}/moral-impact/run"
+       onclick="showRunOverlay()"
+       class="flex items-center gap-2 text-sm bg-emerald-500/10 hover:bg-emerald-500/20
+              text-emerald-400 border border-emerald-500/30 hover:border-emerald-400/50
+              py-2 px-4 rounded-xl transition-colors no-underline">
+      ⚖️ Re-run Moral Impact
+    </a>
+  </div>
+</div>
+
+{% else %}
+{# Report state exists but JSON unreadable #}
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
+  <p class="text-slate-500 text-sm">
+    Report file could not be read. Try running the moral impact editor again.
+  </p>
+</div>
+{% endif %}
+
+{% endif %}{# end not_run / report view #}
+
+{# ── Run overlay ───────────────────────────────────────────────────────── #}
+<div id="run-overlay" class="hidden">
+  <div class="spinner"></div>
+  <div class="text-center">
+    <div class="text-lg font-serif text-emerald-400 mb-2">Analyzing moral impact…</div>
+    <div class="text-sm text-slate-400">Reviewing each chapter for ethical and social implications.</div>
+    <div class="text-xs text-slate-600 mt-2">This takes 2–5 minutes for a full book.</div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  /* ── Chapter expand/collapse ─────────────────────────────────────────────── */
+  function toggleChapter(key) {
+    const card = document.getElementById('chapter-card-'  + key);
+    const body = document.getElementById('chapter-body-'  + key);
+
+    if (!body) return;
+
+    const isOpen = !body.classList.contains('hidden');
+    if (isOpen) {
+      body.classList.add('hidden');
+      card.classList.remove('open');
+    } else {
+      body.classList.remove('hidden');
+      card.classList.add('open');
+    }
+  }
+
+  /* ── Single chapter selector in empty state ──────────────────────────────── */
+  function toggleSingleChapterEmpty(checked) {
+    const sel = document.getElementById('single-chap-select-empty');
+    if (!sel) return;
+    sel.classList.toggle('hidden', !checked);
+    sel.name = checked ? 'single_chapter' : '__disabled';
+  }
+
+  /* ── Loading overlay ─────────────────────────────────────────────────────── */
+  function showRunOverlay() {
+    const overlay = document.getElementById('run-overlay');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+      overlay.classList.add('active');
+    }
+  }
+
+  /* ── Handle run link with optional single chapter ──────────────────────── */
+  function handleRunClick(event, baseUrl) {
+    event.preventDefault();
+    const select = document.getElementById('single-chap-select-empty');
+    if (select && !select.classList.contains('hidden')) {
+      const chapter = select.value;
+      if (chapter) {
+        window.location.href = baseUrl + '?chapter=' + encodeURIComponent(chapter);
+        showRunOverlay();
+        return;
+      }
+    }
+    window.location.href = baseUrl;
+    showRunOverlay();
+  }
+
+  /* ── Handle single chapter re-run link ───────────────────────────────── */
+  function handleSingleChapterClick(event, baseUrl) {
+    event.preventDefault();
+    const select = document.getElementById('single-chapter-select');
+    const chapter = select.value;
+    if (chapter) {
+      window.location.href = baseUrl + '?chapter=' + encodeURIComponent(chapter);
+      showRunOverlay();
+    }
+  }
+
+  /* ── Concern context: convert **text** → <strong> on page load ───────────── */
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.concern-context').forEach(function (el) {
+      el.innerHTML = el.innerHTML.replace(/\*\*(.*?)\*\*/g, '<strong class="text-emerald-400">$1</strong>');
+    });
+  });
+
+  /* ── After HTMX swaps, re-run the bold conversion on new content ─────────── */
+  document.addEventListener('htmx:afterSwap', function (evt) {
+    evt.target.querySelectorAll('.concern-context').forEach(function (el) {
+      el.innerHTML = el.innerHTML.replace(/\*\*(.*?)\*\*/g, '<strong class="text-emerald-400">$1</strong>');
+    });
+  });
+
+  /* ── Inline note editor for concerns ─────────────────────────────────────── */
+  function openConcernEditor(chKey, idx) {
+    var actionsEl = document.getElementById('concern-actions-' + chKey + '-' + idx);
+    if (!actionsEl || actionsEl.querySelector('textarea')) return;
+
+    actionsEl.innerHTML =
+      '<div class="space-y-2">' +
+        '<textarea id="concern-note-' + chKey + '-' + idx + '" ' +
+          'class="w-full bg-slate-950 text-slate-200 text-xs font-sans leading-relaxed ' +
+          'border border-emerald-600 rounded-lg p-2.5 focus:outline-none focus:border-emerald-400 ' +
+          'resize-y" rows="2" placeholder="Your note (e.g. \'Intentional — serves the character arc\' or \'Will revise in next draft\')"></textarea>' +
+        '<div class="flex items-center gap-2">' +
+          '<button onclick="saveConcernNote(\'' + chKey + '\', ' + idx + ', \'accept\')" ' +
+            'class="text-xs font-medium bg-emerald-900/60 hover:bg-emerald-800 text-emerald-300 ' +
+            'border border-emerald-700/50 rounded-lg px-3 py-1.5 transition-colors cursor-pointer">' +
+            '✓ Save &amp; Accept</button>' +
+          '<button onclick="saveConcernNote(\'' + chKey + '\', ' + idx + ', \'dismiss\')" ' +
+            'class="text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-400 ' +
+            'border border-slate-700 rounded-lg px-3 py-1.5 transition-colors cursor-pointer">' +
+            'Save &amp; Dismiss</button>' +
+          '<button onclick="cancelConcernEditor(\'' + chKey + '\', ' + idx + ')" ' +
+            'class="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer">' +
+            'Cancel</button>' +
+        '</div>' +
+      '</div>';
+
+    var ta = document.getElementById('concern-note-' + chKey + '-' + idx);
+    if (ta) ta.focus();
+  }
+
+  function saveConcernNote(chKey, idx, decision) {
+    var ta = document.getElementById('concern-note-' + chKey + '-' + idx);
+    var note = ta ? ta.value.trim() : '';
+
+    var url = '/projects/{{ project.id }}/moral-impact/respond/' + chKey + '/' + idx;
+    var form = new FormData();
+    form.append('decision', decision);
+    form.append('author_note', note);
+
+    fetch(url, { method: 'POST', body: form })
+      .then(function(resp) { return resp.text(); })
+      .then(function(html) {
+        var el = document.getElementById('concern-' + chKey + '-' + idx);
+        if (el) {
+          el.outerHTML = html;
+          var newEl = document.getElementById('concern-' + chKey + '-' + idx);
+          if (newEl) {
+            htmx.process(newEl);
+            newEl.querySelectorAll('.concern-context').forEach(function (ctx) {
+              ctx.innerHTML = ctx.innerHTML.replace(/\*\*(.*?)\*\*/g, '<strong class="text-emerald-400">$1</strong>');
+            });
+          }
+        }
+      });
+  }
+
+  function cancelConcernEditor(chKey, idx) {
+    var url = '/projects/{{ project.id }}/moral-impact/respond/' + chKey + '/' + idx;
+    var form = new FormData();
+    form.append('decision', 'cancel');
+
+    fetch(url, { method: 'POST', body: form })
+      .then(function(resp) { return resp.text(); })
+      .then(function(html) {
+        var el = document.getElementById('concern-' + chKey + '-' + idx);
+        if (el) {
+          el.outerHTML = html;
+          var newEl = document.getElementById('concern-' + chKey + '-' + idx);
+          if (newEl) {
+            htmx.process(newEl);
+            newEl.querySelectorAll('.concern-context').forEach(function (ctx) {
+              ctx.innerHTML = ctx.innerHTML.replace(/\*\*(.*?)\*\*/g, '<strong class="text-emerald-400">$1</strong>');
+            });
+          }
+        }
+      });
+  }
+</script>
+{% endblock %}

@@ -224,6 +224,13 @@
                title="Representation, sensitivity, and inclusive language analysis">
               <span class="w-4 text-center opacity-60">🌍</span> Diversity Reader
             </a>
+            <a href="/projects/{{ project.id }}/moral-impact"
+               class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs
+                      {% if active_page == 'moral_impact' %}bg-slate-800 text-amber-400{% else %}text-slate-500 hover:bg-slate-800/60 hover:text-slate-300{% endif %}
+                      transition-colors"
+               title="Ethical and social impact analysis — is your book making the world better?">
+              <span class="w-4 text-center opacity-60">⚖️</span> Moral Impact
+            </a>
           </div>
 
           {# Phase 6: Targeted Tools #}

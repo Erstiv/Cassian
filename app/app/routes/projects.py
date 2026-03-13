@@ -199,7 +199,7 @@ async def upload_manuscript(
     dest_dir = UPLOADS_DIR / str(project_id) / "chapters"
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    accepted      = (".docx", ".doc", ".txt")
+    accepted      = (".docx", ".doc", ".txt", ".pdf")
     added         = 0
     skipped       = []
 
