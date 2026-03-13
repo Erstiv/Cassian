@@ -708,6 +708,22 @@ def run():
                     padded      = ch_id.zfill(2) if ch_id.isdigit() else ch_id
                     output_path = OUTPUT_DIR / f"chapter_{padded}.json"
 
+                # Collision protection: if this chapter file already exists
+                # from a previous file in this batch, rename with a suffix
+                if output_path.exists():
+                    existing = json.loads(output_path.read_text(encoding="utf-8"))
+                    existing_source = existing.get("source_file", "unknown")
+                    warn(f"  ⚠ chapter_{padded}.json already exists (from {existing_source})")
+                    suffix = "b"
+                    while True:
+                        alt_path = OUTPUT_DIR / f"chapter_{padded}_{suffix}.json"
+                        if not alt_path.exists():
+                            break
+                        suffix = chr(ord(suffix) + 1)  # b → c → d → ...
+                    output_path = alt_path
+                    chapter_data["chapter_id"] = f"{padded}_{suffix}"
+                    warn(f"    → Saving as {output_path.name} instead (rename in Chapter Manager if needed)")
+
                 save_json(chapter_data, output_path)
                 ok(f"Saved → {output_path.name}")
 
